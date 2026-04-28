@@ -9,33 +9,42 @@
 ```
 uv run python main.py            # 拉取 RSS、同步用户、解析文章入库
 uv run python main.py --tts      # 生成语音音频（需要 MIMO_API_KEY）
-uv run python generate_report.py  # 生成 AI 早报（Markdown + 语音稿）
+uv run python main.py --dry-run  # 模拟运行，不标记文章为已推送
+uv run python tts.py             # 批量生成 reports/ 目录下所有语音播报稿的音频
+
+# 调试命令
+uv run python main.py --show-history           # 查看所有用户的推送历史
+uv run python main.py --show-history Alice     # 查看 Alice 的推送历史
+uv run python main.py --reset-history          # 重置所有用户的推送历史
+uv run python main.py --reset-history Alice    # 重置 Alice 的推送历史
 ```
 
 ## Project structure
-- `main.py` — entrypoint；三步流程：1) 读取本地 XML 存入 raw_feeds 表 2) 同步用户与订阅 3) 从 raw_feeds 解析文章存入 articles 表
-- `generate_report.py` — AI 早报生成模块；从 articles 表读取最近一天的论文，调用 DeepSeek API 生成 Markdown 早报和语音播报稿
-  - 可作为脚本直接运行，也可被其他脚本导入（导入不触发副作用）
-  - 公开函数：`fetch_latest_articles()`, `build_user_prompt()`, `generate_report()`, `generate_voice_script()`, `call_llm()`
+- `main.py` — entrypoint；流程：1) 读取本地 XML 存入 raw_feeds 表 2) 同步用户与订阅 3) 从 raw_feeds 解析文章存入 articles 表 4) 为每位用户智能筛选候选文章 5) AI 选择 2-3 篇推荐文章 6) 生成早报和语音
+- `generate_report.py` — AI 早报生成模块；智能筛选候选文章，调用 DeepSeek API 生成 Markdown 早报和语音播报稿
+  - 可被其他脚本导入（导入不触发副作用）
+  - 公开函数：`fetch_candidate_articles()`, `select_articles()`, `build_user_prompt()`, `generate_report()`, `generate_voice_script()`, `call_llm()`
 - `tts.py` — 语音合成模块；调用小米 MiMo-V2.5-TTS API 将播报稿转为音频
+  - 可作为脚本运行：`uv run python tts.py` 批量生成所有语音播报稿的音频
   - 公开函数：`text_to_speech(text, output_path, voice, style_instruction)`
   - 默认语音：冰糖（中文女声）
-- `db.py` — SQLite 数据库模块（init_db, ensure_feed, save_raw_feed, save_article, ensure_user, ensure_subscription）
+- `db.py` — SQLite 数据库模块（init_db, ensure_feed, save_raw_feed, save_article, ensure_user, ensure_subscription, mark_article_pushed, reset_user_history, get_user_history）
 - `feeds.json` — feed 源配置（name + url）
 - `users.json` — 用户与订阅配置（name + subscriptions，subscriptions 用期刊名匹配 feeds 表）
 - `.env` — 环境变量（`DEEPSEEK_API_KEY`、`MIMO_API_KEY`，已加入 .gitignore）
 - `output/` — 本地 RSS XML 缓存（本地有则直接读取，无则自动从 URL 下载；已加入 .gitignore）
-- `prompts/` — LLM 提示词文件（`report_system.txt` 和 `voice_system.txt`，修改提示词只需编辑这两个文件）
+- `prompts/` — LLM 提示词文件（`report_system.txt` 和 `voice_system.txt` 和 `select_system.txt`，修改提示词只需编辑这三个文件）
 - `reports/` — 生成的早报输出目录（`YYYY-MM-DD.md` + `YYYY-MM-DD-voice.txt` + `YYYY-MM-DD-voice.wav`，已加入 .gitignore）
 - `data.db` — SQLite 数据库文件（已加入 .gitignore）
 
 ## Database
-- 五张表：
+- 六张表：
   - `feeds` — RSS 源信息（name, url）
   - `raw_feeds` — 每次拉取的原始 XML（SHA-256 去重）
   - `articles` — 解析后的文章（link UNIQUE 去重，published 为 ISO 8601 格式，authors 为 JSON 数组）
   - `users` — 用户（name UNIQUE）
   - `subscriptions` — 用户与 feed 的多对多订阅关系（UNIQUE(user_id, feed_id)）
+  - `user_article_history` — 用户推送历史（UNIQUE(user_id, article_id)）
 - 结构定义在 `db.py` 的 `init_db()` 中，后续改表直接改这个函数
 - 不使用迁移框架；改表后删除 `data.db` 重新运行即可重建（原始数据从 `output/` 重新导入）
 
@@ -53,5 +62,7 @@ uv run python generate_report.py  # 生成 AI 早报（Markdown + 语音稿）
 ## Gotchas
 - IEEE 会对默认 User-Agent 返回 418，下载时需伪装浏览器 UA（已在代码中处理）
 - `pandas` and `pydantic` are declared as dependencies but not yet used in code
-- `generate_report.py` 的 `load_dotenv()` 仅在 `main()` 中调用，导入时不会触发副作用
 
+
+# todos
+- 小米 mimo tts 模型输出文本时，可能会读完一段内容后又读一遍。并且可能会读一些播报稿中不存在的文字。模型的问题我没法解决，但是也许可以通过每次只给一段，然后拼接的方式绕过这个问题。

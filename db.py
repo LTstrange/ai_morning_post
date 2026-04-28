@@ -60,6 +60,14 @@ def init_db(db_path=DB_PATH):
             authors    TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS user_article_history (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL REFERENCES users(id),
+            article_id INTEGER NOT NULL REFERENCES articles(id),
+            pushed_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, article_id)
+        );
     """)
     conn.commit()
     conn.close()
@@ -153,7 +161,7 @@ def ensure_subscription(conn, user_id, feed_id):
 def fetch_user_latest_articles(conn, user_id, limit=5):
     """根据用户订阅，按 published 降序取最近的 limit 篇论文。返回 rows。"""
     rows = conn.execute(
-        "SELECT a.title, a.authors, a.link, a.summary, a.published, f.name AS feed_name "
+        "SELECT a.id, a.title, a.authors, a.link, a.summary, a.published, f.name AS feed_name "
         "FROM articles a "
         "JOIN feeds f ON a.feed_id = f.id "
         "JOIN subscriptions s ON s.feed_id = f.id "
@@ -163,4 +171,110 @@ def fetch_user_latest_articles(conn, user_id, limit=5):
         (user_id, limit),
     ).fetchall()
 
+    return rows
+
+
+def mark_article_pushed(conn, user_id, article_id):
+    """标记文章已推送给用户。"""
+    try:
+        conn.execute(
+            "INSERT INTO user_article_history (user_id, article_id) VALUES (?, ?)",
+            (user_id, article_id),
+        )
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+
+def get_today_articles(conn, user_id, today):
+    """获取用户订阅期刊中当天发布的文章。"""
+    rows = conn.execute(
+        "SELECT a.id, a.title, a.authors, a.link, a.summary, a.published, f.name AS feed_name "
+        "FROM articles a "
+        "JOIN feeds f ON a.feed_id = f.id "
+        "JOIN subscriptions s ON s.feed_id = f.id "
+        "WHERE s.user_id = ? AND substr(a.published, 1, 10) = ? "
+        "ORDER BY a.published DESC",
+        (user_id, today),
+    ).fetchall()
+    return rows
+
+
+def get_unpushed_subscribed_articles(conn, user_id, exclude_ids, limit):
+    """从用户订阅期刊中随机取未推送过的文章，排除指定 ID。"""
+    if not exclude_ids:
+        exclude_clause = ""
+        params = (user_id, user_id, limit)
+    else:
+        placeholders = ",".join("?" * len(exclude_ids))
+        exclude_clause = f"AND a.id NOT IN ({placeholders})"
+        params = (user_id, *exclude_ids, user_id, limit)
+
+    rows = conn.execute(
+        f"SELECT a.id, a.title, a.authors, a.link, a.summary, a.published, f.name AS feed_name "
+        f"FROM articles a "
+        f"JOIN feeds f ON a.feed_id = f.id "
+        f"JOIN subscriptions s ON s.feed_id = f.id "
+        f"WHERE s.user_id = ? {exclude_clause} "
+        f"AND a.id NOT IN (SELECT article_id FROM user_article_history WHERE user_id = ?) "
+        f"ORDER BY RANDOM() "
+        f"LIMIT ?",
+        params,
+    ).fetchall()
+    return rows
+
+
+def get_unpushed_all_articles(conn, user_id, exclude_ids, limit):
+    """从所有期刊中随机取未推送过的文章，排除指定 ID。"""
+    if not exclude_ids:
+        exclude_clause = ""
+        params = (user_id, limit)
+    else:
+        placeholders = ",".join("?" * len(exclude_ids))
+        exclude_clause = f"AND a.id NOT IN ({placeholders})"
+        params = (*exclude_ids, user_id, limit)
+
+    rows = conn.execute(
+        f"SELECT a.id, a.title, a.authors, a.link, a.summary, a.published, f.name AS feed_name "
+        f"FROM articles a "
+        f"JOIN feeds f ON a.feed_id = f.id "
+        f"WHERE 1=1 {exclude_clause} "
+        f"AND a.id NOT IN (SELECT article_id FROM user_article_history WHERE user_id = ?) "
+        f"ORDER BY RANDOM() "
+        f"LIMIT ?",
+        params,
+    ).fetchall()
+    return rows
+
+
+def reset_user_history(conn, user_id=None):
+    """重置用户推送历史。user_id 为 None 时重置所有用户。"""
+    if user_id:
+        conn.execute("DELETE FROM user_article_history WHERE user_id = ?", (user_id,))
+    else:
+        conn.execute("DELETE FROM user_article_history")
+    conn.commit()
+
+
+def get_user_history(conn, user_id=None):
+    """获取用户推送历史。user_id 为 None 时获取所有用户的历史。"""
+    if user_id:
+        rows = conn.execute(
+            "SELECT u.name AS user_name, a.title, h.pushed_at "
+            "FROM user_article_history h "
+            "JOIN users u ON h.user_id = u.id "
+            "JOIN articles a ON h.article_id = a.id "
+            "WHERE h.user_id = ? "
+            "ORDER BY h.pushed_at DESC",
+            (user_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT u.name AS user_name, a.title, h.pushed_at "
+            "FROM user_article_history h "
+            "JOIN users u ON h.user_id = u.id "
+            "JOIN articles a ON h.article_id = a.id "
+            "ORDER BY u.name, h.pushed_at DESC",
+        ).fetchall()
     return rows

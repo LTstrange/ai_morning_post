@@ -48,3 +48,29 @@ def text_to_speech(text, output_path, voice=DEFAULT_VOICE, style_instruction=Non
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "wb") as f:
         f.write(audio_bytes)
+
+
+def main():
+    """批量生成 reports/ 目录下所有语音播报稿的音频。"""
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    reports_dir = Path(__file__).parent / "reports"
+    voice_files = sorted(reports_dir.glob("*-voice.txt"))
+
+    if not voice_files:
+        print("未找到语音播报稿文件")
+        return
+
+    print(f"找到 {len(voice_files)} 个语音播报稿")
+
+    for voice_file in voice_files:
+        audio_file = voice_file.with_suffix(".wav")
+        print(f"正在生成: {audio_file.name}")
+        text = voice_file.read_text(encoding="utf-8")
+        text_to_speech(text, audio_file)
+        print(f"  完成: {audio_file}")
+
+
+if __name__ == "__main__":
+    main()
