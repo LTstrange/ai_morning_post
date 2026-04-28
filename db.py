@@ -75,14 +75,10 @@ def init_db(db_path=DB_PATH):
 
 def ensure_feed(conn, name, url):
     """确保 feeds 表中存在该源，返回 feed_id。"""
-    row = conn.execute(
-        "SELECT id FROM feeds WHERE url = ?", (url,)
-    ).fetchone()
+    row = conn.execute("SELECT id FROM feeds WHERE url = ?", (url,)).fetchone()
     if row:
         return row["id"]
-    cur = conn.execute(
-        "INSERT INTO feeds (name, url) VALUES (?, ?)", (name, url)
-    )
+    cur = conn.execute("INSERT INTO feeds (name, url) VALUES (?, ?)", (name, url))
     conn.commit()
     return cur.lastrowid
 
@@ -130,14 +126,10 @@ def save_article(conn, feed_id, article):
 
 def ensure_user(conn, name):
     """确保 users 表中存在该用户，返回 user_id。"""
-    row = conn.execute(
-        "SELECT id FROM users WHERE name = ?", (name,)
-    ).fetchone()
+    row = conn.execute("SELECT id FROM users WHERE name = ?", (name,)).fetchone()
     if row:
         return row["id"]
-    cur = conn.execute(
-        "INSERT INTO users (name) VALUES (?)", (name,)
-    )
+    cur = conn.execute("INSERT INTO users (name) VALUES (?)", (name,))
     conn.commit()
     return cur.lastrowid
 

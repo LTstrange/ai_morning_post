@@ -152,12 +152,26 @@ def main():
     parser.add_argument("-u", "--user", help="只为指定用户名生成早报")
     parser.add_argument("--report", action="store_true", help="只生成 Markdown 早报")
     parser.add_argument("--voice", action="store_true", help="只生成语音播报稿")
-    parser.add_argument("--tts", action="store_true", help="生成语音音频（需要 MIMO_API_KEY）")
-    parser.add_argument("--dry-run", action="store_true", help="模拟运行，不标记文章为已推送")
-    parser.add_argument("--reset-history", nargs="?", const="ALL", metavar="USERNAME",
-                        help="重置推送历史（指定用户名或留空重置所有）")
-    parser.add_argument("--show-history", nargs="?", const="ALL", metavar="USERNAME",
-                        help="查看推送历史（指定用户名或留空查看所有）")
+    parser.add_argument(
+        "--tts", action="store_true", help="生成语音音频（需要 MIMO_API_KEY）"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="模拟运行，不标记文章为已推送"
+    )
+    parser.add_argument(
+        "--reset-history",
+        nargs="?",
+        const="ALL",
+        metavar="USERNAME",
+        help="重置推送历史（指定用户名或留空重置所有）",
+    )
+    parser.add_argument(
+        "--show-history",
+        nargs="?",
+        const="ALL",
+        metavar="USERNAME",
+        help="查看推送历史（指定用户名或留空查看所有）",
+    )
     args = parser.parse_args()
 
     init_db()
@@ -169,9 +183,11 @@ def main():
             print("=== 所有用户推送历史 ===")
             history = get_user_history(conn)
         else:
-            user = conn.execute("SELECT id FROM users WHERE name = ?", (args.show_history,)).fetchone()
+            user = conn.execute(
+                "SELECT id FROM users WHERE name = ?", (args.show_history,)
+            ).fetchone()
             if not user:
-                print(f"未找到用户 \"{args.show_history}\"")
+                print(f'未找到用户 "{args.show_history}"')
                 conn.close()
                 return
             print(f"=== {args.show_history} 的推送历史 ===")
@@ -190,9 +206,11 @@ def main():
             reset_user_history(conn)
             print("已重置所有用户的推送历史")
         else:
-            user = conn.execute("SELECT id FROM users WHERE name = ?", (args.reset_history,)).fetchone()
+            user = conn.execute(
+                "SELECT id FROM users WHERE name = ?", (args.reset_history,)
+            ).fetchone()
             if not user:
-                print(f"未找到用户 \"{args.reset_history}\"")
+                print(f'未找到用户 "{args.reset_history}"')
                 conn.close()
                 return
             reset_user_history(conn, user["id"])
@@ -229,7 +247,7 @@ def main():
             "SELECT id, name FROM users WHERE name = ?", (args.user,)
         ).fetchall()
         if not users:
-            print(f"未找到用户 \"{args.user}\"，跳过早报生成")
+            print(f'未找到用户 "{args.user}"，跳过早报生成')
             conn.close()
             return
     else:
@@ -246,8 +264,10 @@ def main():
             print(f"  [{user_name}] 没有找到候选论文，跳过")
             continue
 
-        print(f"  [{user_name}] 找到 {len(today_articles)} 篇当天论文，"
-              f"共 {len(candidates)} 篇候选论文")
+        print(
+            f"  [{user_name}] 找到 {len(today_articles)} 篇当天论文，"
+            f"共 {len(candidates)} 篇候选论文"
+        )
 
         # AI 选择 2-3 篇
         print(f"  [{user_name}] 正在选择推荐文章...")

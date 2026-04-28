@@ -43,14 +43,18 @@ def fetch_candidate_articles(conn, user_id, today, target_count=10):
     if len(candidates) < target_count:
         # 从用户订阅期刊中取未推送过的文章
         remaining = target_count - len(candidates)
-        subscribed = get_unpushed_subscribed_articles(conn, user_id, candidate_ids, remaining)
+        subscribed = get_unpushed_subscribed_articles(
+            conn, user_id, candidate_ids, remaining
+        )
         candidates.extend(subscribed)
         candidate_ids = [a["id"] for a in candidates]
 
     if len(candidates) < target_count:
         # 从所有期刊中取未推送过的文章
         remaining = target_count - len(candidates)
-        all_articles = get_unpushed_all_articles(conn, user_id, candidate_ids, remaining)
+        all_articles = get_unpushed_all_articles(
+            conn, user_id, candidate_ids, remaining
+        )
         candidates.extend(all_articles)
 
     return candidates, today_articles
@@ -58,7 +62,9 @@ def fetch_candidate_articles(conn, user_id, today, target_count=10):
 
 def build_selection_prompt(candidates):
     """将候选文章列表组装为发给 LLM 的选择 prompt。"""
-    lines = [f"以下是 {len(candidates)} 篇候选论文，请从中选择 2-3 篇最值得推荐的论文：\n"]
+    lines = [
+        f"以下是 {len(candidates)} 篇候选论文，请从中选择 2-3 篇最值得推荐的论文：\n"
+    ]
 
     for i, a in enumerate(candidates):
         authors = ", ".join(json.loads(a["authors"]))
@@ -91,7 +97,7 @@ def select_articles(candidates):
             # 如果没有有效索引，返回前 3 篇
             return candidates[:3]
         return [candidates[i] for i in selected_indices]
-    except (json.JSONDecodeError, KeyError):
+    except json.JSONDecodeError, KeyError:
         # 解析失败，返回前 3 篇
         return candidates[:3]
 

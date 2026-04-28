@@ -62,7 +62,3 @@ uv run python main.py --reset-history Alice    # 重置 Alice 的推送历史
 ## Gotchas
 - IEEE 会对默认 User-Agent 返回 418，下载时需伪装浏览器 UA（已在代码中处理）
 - `pandas` and `pydantic` are declared as dependencies but not yet used in code
-
-
-# todos
-- 小米 mimo tts 模型输出文本时，可能会读完一段内容后又读一遍。并且可能会读一些播报稿中不存在的文字。模型的问题我没法解决，但是也许可以通过每次只给一段，然后拼接的方式绕过这个问题。

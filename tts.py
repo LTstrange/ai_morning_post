@@ -53,6 +53,7 @@ def text_to_speech(text, output_path, voice=DEFAULT_VOICE, style_instruction=Non
 def main():
     """批量生成 reports/ 目录下所有语音播报稿的音频。"""
     from dotenv import load_dotenv
+
     load_dotenv()
 
     reports_dir = Path(__file__).parent / "reports"
