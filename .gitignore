@@ -17,3 +17,9 @@ wheels/
 
 # 本地 RSS XML 缓存（可从 URL 重新下载）
 output/
+
+# 环境变量
+.env
+
+# 生成的早报
+reports/
