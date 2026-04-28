@@ -148,3 +148,23 @@ def ensure_subscription(conn, user_id, feed_id):
     )
     conn.commit()
     return True
+
+
+def fetch_user_latest_articles(conn, user_id, limit=5):
+    """根据用户订阅，按 published 降序取最近的 limit 篇论文。返回 (latest_date, rows)。"""
+    rows = conn.execute(
+        "SELECT a.title, a.authors, a.link, a.summary, a.published, f.name AS feed_name "
+        "FROM articles a "
+        "JOIN feeds f ON a.feed_id = f.id "
+        "JOIN subscriptions s ON s.feed_id = f.id "
+        "WHERE s.user_id = ? "
+        "ORDER BY a.published DESC "
+        "LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
+
+    if not rows:
+        return None, []
+
+    latest_date = rows[0]["published"][:10]
+    return latest_date, rows

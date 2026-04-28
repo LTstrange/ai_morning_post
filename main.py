@@ -5,9 +5,14 @@ from pathlib import Path
 import feedparser
 import requests
 
+from dotenv import load_dotenv
+
 from db import (
     get_connection, init_db, ensure_feed, save_raw_feed, save_article,
-    ensure_user, ensure_subscription,
+    ensure_user, ensure_subscription, fetch_user_latest_articles,
+)
+from generate_report import (
+    build_user_prompt, generate_report, generate_voice_script, REPORTS_DIR,
 )
 
 
@@ -150,6 +155,35 @@ def main():
         print(f"  摘要: {row['summary'][:100]}...")
         print()
 
+    print("=== 为每位用户生成个人早报 ===")
+    load_dotenv()
+    REPORTS_DIR.mkdir(exist_ok=True)
+
+    users = conn.execute("SELECT id, name FROM users").fetchall()
+    for user in users:
+        user_id, user_name = user["id"], user["name"]
+        latest_date, articles = fetch_user_latest_articles(conn, user_id)
+
+        if not articles:
+            print(f"  [{user_name}] 没有找到相关论文，跳过")
+            continue
+
+        print(f"  [{user_name}] 找到 {len(articles)} 篇论文（最新日期 {latest_date}）")
+        user_prompt = build_user_prompt(latest_date, articles)
+
+        print(f"  [{user_name}] 正在生成 Markdown 早报...")
+        report = generate_report(user_prompt)
+        report_path = REPORTS_DIR / f"{latest_date}-{user_name}.md"
+        report_path.write_text(report, encoding="utf-8")
+        print(f"  [{user_name}] 早报已生成: {report_path}")
+
+        print(f"  [{user_name}] 正在生成语音稿...")
+        voice_script = generate_voice_script(user_prompt)
+        voice_path = REPORTS_DIR / f"{latest_date}-{user_name}-voice.txt"
+        voice_path.write_text(voice_script, encoding="utf-8")
+        print(f"  [{user_name}] 语音稿已生成: {voice_path}")
+
+    print()
     conn.close()
 
 
