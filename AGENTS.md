@@ -8,6 +8,7 @@
 ## Run
 ```
 uv run python main.py            # 拉取 RSS、同步用户、解析文章入库
+uv run python main.py --tts      # 生成语音音频（需要 MIMO_API_KEY）
 uv run python generate_report.py  # 生成 AI 早报（Markdown + 语音稿）
 ```
 
@@ -16,13 +17,16 @@ uv run python generate_report.py  # 生成 AI 早报（Markdown + 语音稿）
 - `generate_report.py` — AI 早报生成模块；从 articles 表读取最近一天的论文，调用 DeepSeek API 生成 Markdown 早报和语音播报稿
   - 可作为脚本直接运行，也可被其他脚本导入（导入不触发副作用）
   - 公开函数：`fetch_latest_articles()`, `build_user_prompt()`, `generate_report()`, `generate_voice_script()`, `call_llm()`
+- `tts.py` — 语音合成模块；调用小米 MiMo-V2.5-TTS API 将播报稿转为音频
+  - 公开函数：`text_to_speech(text, output_path, voice, style_instruction)`
+  - 默认语音：冰糖（中文女声）
 - `db.py` — SQLite 数据库模块（init_db, ensure_feed, save_raw_feed, save_article, ensure_user, ensure_subscription）
 - `feeds.json` — feed 源配置（name + url）
 - `users.json` — 用户与订阅配置（name + subscriptions，subscriptions 用期刊名匹配 feeds 表）
-- `.env` — 环境变量（`DEEPSEEK_API_KEY`，已加入 .gitignore）
+- `.env` — 环境变量（`DEEPSEEK_API_KEY`、`MIMO_API_KEY`，已加入 .gitignore）
 - `output/` — 本地 RSS XML 缓存（本地有则直接读取，无则自动从 URL 下载；已加入 .gitignore）
 - `prompts/` — LLM 提示词文件（`report_system.txt` 和 `voice_system.txt`，修改提示词只需编辑这两个文件）
-- `reports/` — 生成的早报输出目录（`YYYY-MM-DD.md` + `YYYY-MM-DD-voice.txt`，已加入 .gitignore）
+- `reports/` — 生成的早报输出目录（`YYYY-MM-DD.md` + `YYYY-MM-DD-voice.txt` + `YYYY-MM-DD-voice.wav`，已加入 .gitignore）
 - `data.db` — SQLite 数据库文件（已加入 .gitignore）
 
 ## Database

@@ -25,6 +25,7 @@ from generate_report import (
     generate_voice_script,
     REPORTS_DIR,
 )
+from tts import text_to_speech
 
 
 def load_feeds(path="feeds.json"):
@@ -145,12 +146,14 @@ def main():
     parser.add_argument("-u", "--user", help="只为指定用户名生成早报")
     parser.add_argument("--report", action="store_true", help="只生成 Markdown 早报")
     parser.add_argument("--voice", action="store_true", help="只生成语音播报稿")
+    parser.add_argument("--tts", action="store_true", help="生成语音音频（需要 MIMO_API_KEY）")
     args = parser.parse_args()
 
-    # 如果两个都没指定，默认两个都生成
-    any_flag = args.report or args.voice
+    # 如果 report/voice/tts 都没指定，默认生成 report 和 voice
+    any_flag = args.report or args.voice or args.tts
     gen_report = args.report if any_flag else True
     gen_voice = args.voice if any_flag else True
+    gen_tts = args.tts
 
     init_db()
     conn = get_connection()
@@ -208,6 +211,21 @@ def main():
             voice_path = REPORTS_DIR / f"{today}-{user_name}-voice.txt"
             voice_path.write_text(voice_script, encoding="utf-8")
             print(f"  [{user_name}] 语音稿已生成: {voice_path}")
+
+        if gen_tts:
+            # 如果播报稿还没生成，先读取或生成
+            if not gen_voice:
+                voice_path = REPORTS_DIR / f"{today}-{user_name}-voice.txt"
+                if voice_path.exists():
+                    voice_script = voice_path.read_text(encoding="utf-8")
+                else:
+                    print(f"  [{user_name}] 正在生成语音稿...")
+                    voice_script = generate_voice_script(user_prompt)
+                    voice_path.write_text(voice_script, encoding="utf-8")
+            audio_path = REPORTS_DIR / f"{today}-{user_name}-voice.wav"
+            print(f"  [{user_name}] 正在生成语音音频...")
+            text_to_speech(voice_script, audio_path)
+            print(f"  [{user_name}] 语音音频已生成: {audio_path}")
 
     print()
     conn.close()
