@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# SQLite database
+*.db
+
+# macOS
+.DS_Store
+
+# 本地 RSS XML 缓存（可从 URL 重新下载）
+output/

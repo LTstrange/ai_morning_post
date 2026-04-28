@@ -1,0 +1,12 @@
+[project]
+name = "ai-morning-post"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "feedparser>=6.0.12",
+    "pandas>=3.0.2",
+    "pydantic>=2.13.3",
+    "requests>=2.33.1",
+]

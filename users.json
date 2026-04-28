@@ -1,0 +1,30 @@
+{
+  "users": [
+    {
+      "name": "Alice",
+      "subscriptions": [
+        "IEEE Transactions on Multimedia",
+        "IEEE Transactions on Mobile Computing"
+      ]
+    },
+    {
+      "name": "Bob",
+      "subscriptions": [
+        "IEEE Transactions on Circuits and Systems for Video Technology",
+        "IEEE Transactions on Multimedia",
+        "IEEE Transactions on Image Processing"
+      ]
+    },
+    {
+      "name": "Charlie",
+      "subscriptions": [
+        "IEEE Journal on Selected Areas in Communications",
+        "IEEE Transactions on Mobile Computing",
+        "IEEE Transactions on Wireless Communications",
+        "IEEE Internet of Things Journal",
+        "IEEE Transactions on Vehicular Technology",
+        "IEEE Transactions on Communications"
+      ]
+    }
+  ]
+}
