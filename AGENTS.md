@@ -21,6 +21,7 @@ uv run python generate_report.py  # 生成 AI 早报（Markdown + 语音稿）
 - `users.json` — 用户与订阅配置（name + subscriptions，subscriptions 用期刊名匹配 feeds 表）
 - `.env` — 环境变量（`DEEPSEEK_API_KEY`，已加入 .gitignore）
 - `output/` — 本地 RSS XML 缓存（本地有则直接读取，无则自动从 URL 下载；已加入 .gitignore）
+- `prompts/` — LLM 提示词文件（`report_system.txt` 和 `voice_system.txt`，修改提示词只需编辑这两个文件）
 - `reports/` — 生成的早报输出目录（`YYYY-MM-DD.md` + `YYYY-MM-DD-voice.txt`，已加入 .gitignore）
 - `data.db` — SQLite 数据库文件（已加入 .gitignore）
 
