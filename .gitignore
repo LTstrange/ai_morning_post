@@ -12,6 +12,9 @@ wheels/
 # SQLite database
 *.db
 
+# vscode settings
+.vscode/
+
 # macOS
 .DS_Store
 
