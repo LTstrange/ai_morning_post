@@ -143,7 +143,14 @@ def sync_users(conn):
 def main():
     parser = argparse.ArgumentParser(description="拉取 RSS、同步用户、生成 AI 早报")
     parser.add_argument("-u", "--user", help="只为指定用户名生成早报")
+    parser.add_argument("--report", action="store_true", help="只生成 Markdown 早报")
+    parser.add_argument("--voice", action="store_true", help="只生成语音播报稿")
     args = parser.parse_args()
+
+    # 如果两个都没指定，默认两个都生成
+    any_flag = args.report or args.voice
+    gen_report = args.report if any_flag else True
+    gen_voice = args.voice if any_flag else True
 
     init_db()
     conn = get_connection()
@@ -188,17 +195,19 @@ def main():
         print(f"  [{user_name}] 找到 {len(articles)} 篇论文（生成日期 {today}）")
         user_prompt = build_user_prompt(today, articles)
 
-        print(f"  [{user_name}] 正在生成 Markdown 早报...")
-        report = generate_report(user_prompt)
-        report_path = REPORTS_DIR / f"{today}-{user_name}.md"
-        report_path.write_text(report, encoding="utf-8")
-        print(f"  [{user_name}] 早报已生成: {report_path}")
+        if gen_report:
+            print(f"  [{user_name}] 正在生成 Markdown 早报...")
+            report = generate_report(user_prompt)
+            report_path = REPORTS_DIR / f"{today}-{user_name}.md"
+            report_path.write_text(report, encoding="utf-8")
+            print(f"  [{user_name}] 早报已生成: {report_path}")
 
-        print(f"  [{user_name}] 正在生成语音稿...")
-        voice_script = generate_voice_script(user_prompt)
-        voice_path = REPORTS_DIR / f"{today}-{user_name}-voice.txt"
-        voice_path.write_text(voice_script, encoding="utf-8")
-        print(f"  [{user_name}] 语音稿已生成: {voice_path}")
+        if gen_voice:
+            print(f"  [{user_name}] 正在生成语音稿...")
+            voice_script = generate_voice_script(user_prompt)
+            voice_path = REPORTS_DIR / f"{today}-{user_name}-voice.txt"
+            voice_path.write_text(voice_script, encoding="utf-8")
+            print(f"  [{user_name}] 语音稿已生成: {voice_path}")
 
     print()
     conn.close()
