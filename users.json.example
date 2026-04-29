@@ -1,0 +1,8 @@
+{
+  "users": [
+    {
+      "name": "Alice",
+      "subscriptions": ["Example Feed 1", "Example Feed 2"]
+    }
+  ]
+}
