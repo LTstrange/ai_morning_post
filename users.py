@@ -10,6 +10,7 @@ from db import (
     init_db,
     ensure_user,
     ensure_subscription,
+    create_push_batch,
     mark_article_pushed,
 )
 from generate_report import (
@@ -89,9 +90,10 @@ def generate_for_users(conn, user_filter=None, gen_report=True, gen_voice=True, 
 
         # 标记已推送
         if not dry_run:
+            batch_id = create_push_batch(conn, user_id)
             for article in selected:
-                mark_article_pushed(conn, user_id, article["id"])
-            print(f"  [{user_name}] 已标记 {len(selected)} 篇文章为已推送")
+                mark_article_pushed(conn, user_id, article["id"], batch_id)
+            print(f"  [{user_name}] 已标记 {len(selected)} 篇文章为已推送（批次 #{batch_id}）")
         else:
             print(f"  [{user_name}] [DRY RUN] 跳过标记已推送文章")
 

@@ -61,13 +61,22 @@ def init_db(db_path=DB_PATH):
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS push_batches (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS user_article_history (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id    INTEGER NOT NULL REFERENCES users(id),
             article_id INTEGER NOT NULL REFERENCES articles(id),
-            pushed_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            batch_id   INTEGER NOT NULL REFERENCES push_batches(id) ON DELETE CASCADE,
             UNIQUE(user_id, article_id)
         );
+
+        CREATE INDEX IF NOT EXISTS idx_history_batch
+            ON user_article_history(batch_id);
     """)
     conn.commit()
     conn.close()
@@ -181,12 +190,22 @@ def fetch_user_latest_articles(conn, user_id, limit=5):
     return rows
 
 
-def mark_article_pushed(conn, user_id, article_id):
-    """标记文章已推送给用户。"""
+def create_push_batch(conn, user_id):
+    """创建推送批次，返回 batch_id。"""
+    cur = conn.execute(
+        "INSERT INTO push_batches (user_id) VALUES (?)",
+        (user_id,),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def mark_article_pushed(conn, user_id, article_id, batch_id):
+    """标记文章已推送给用户，关联到指定批次。"""
     try:
         conn.execute(
-            "INSERT INTO user_article_history (user_id, article_id) VALUES (?, ?)",
-            (user_id, article_id),
+            "INSERT INTO user_article_history (user_id, article_id, batch_id) VALUES (?, ?, ?)",
+            (user_id, article_id, batch_id),
         )
         conn.commit()
         return True
@@ -255,33 +274,98 @@ def get_unpushed_all_articles(conn, user_id, exclude_ids, limit):
     return rows
 
 
-def reset_user_history(conn, user_id=None):
-    """重置用户推送历史。user_id 为 None 时重置所有用户。"""
-    if user_id:
-        conn.execute("DELETE FROM user_article_history WHERE user_id = ?", (user_id,))
+def reset_user_history(conn, user_id=None, batch_id=None, date_str=None, after_date=None):
+    """重置用户推送历史。通过删除 push_batches 级联清理 history。
+
+    - user_id: 限定用户
+    - batch_id: 删除指定批次
+    - date_str: 删除指定日期的批次（YYYY-MM-DD）
+    - after_date: 删除该日期之后的批次（YYYY-MM-DD）
+    """
+    if batch_id:
+        conn.execute("DELETE FROM push_batches WHERE id = ?", (batch_id,))
+    elif date_str:
+        if user_id:
+            conn.execute(
+                "DELETE FROM push_batches WHERE user_id = ? AND DATE(created_at) = ?",
+                (user_id, date_str),
+            )
+        else:
+            conn.execute(
+                "DELETE FROM push_batches WHERE DATE(created_at) = ?",
+                (date_str,),
+            )
+    elif after_date:
+        if user_id:
+            conn.execute(
+                "DELETE FROM push_batches WHERE user_id = ? AND DATE(created_at) > ?",
+                (user_id, after_date),
+            )
+        else:
+            conn.execute(
+                "DELETE FROM push_batches WHERE DATE(created_at) > ?",
+                (after_date,),
+            )
+    elif user_id:
+        conn.execute("DELETE FROM push_batches WHERE user_id = ?", (user_id,))
     else:
-        conn.execute("DELETE FROM user_article_history")
+        conn.execute("DELETE FROM push_batches")
     conn.commit()
 
 
-def get_user_history(conn, user_id=None):
-    """获取用户推送历史。user_id 为 None 时获取所有用户的历史。"""
+def get_user_history(conn, user_id=None, batch_id=None, date_str=None, date_from=None, date_to=None):
+    """获取用户推送历史。
+
+    - user_id: 限定用户
+    - batch_id: 限定批次
+    - date_str: 限定日期（YYYY-MM-DD）
+    - date_from / date_to: 日期范围
+    """
+    base = (
+        "SELECT u.name AS user_name, a.title, b.created_at AS pushed_at, b.id AS batch_id "
+        "FROM user_article_history h "
+        "JOIN push_batches b ON h.batch_id = b.id "
+        "JOIN users u ON h.user_id = u.id "
+        "JOIN articles a ON h.article_id = a.id "
+    )
+    conditions = []
+    params = []
+
     if user_id:
-        rows = conn.execute(
-            "SELECT u.name AS user_name, a.title, h.pushed_at "
-            "FROM user_article_history h "
-            "JOIN users u ON h.user_id = u.id "
-            "JOIN articles a ON h.article_id = a.id "
-            "WHERE h.user_id = ? "
-            "ORDER BY h.pushed_at DESC",
-            (user_id,),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT u.name AS user_name, a.title, h.pushed_at "
-            "FROM user_article_history h "
-            "JOIN users u ON h.user_id = u.id "
-            "JOIN articles a ON h.article_id = a.id "
-            "ORDER BY u.name, h.pushed_at DESC",
-        ).fetchall()
-    return rows
+        conditions.append("h.user_id = ?")
+        params.append(user_id)
+    if batch_id:
+        conditions.append("b.id = ?")
+        params.append(batch_id)
+    if date_str:
+        conditions.append("DATE(b.created_at) = ?")
+        params.append(date_str)
+    if date_from:
+        conditions.append("DATE(b.created_at) >= ?")
+        params.append(date_from)
+    if date_to:
+        conditions.append("DATE(b.created_at) <= ?")
+        params.append(date_to)
+
+    if conditions:
+        base += "WHERE " + " AND ".join(conditions) + " "
+
+    base += "ORDER BY u.name, b.created_at DESC"
+
+    return conn.execute(base, params).fetchall()
+
+
+def get_push_batches(conn, user_id=None):
+    """获取推送批次列表及每批次文章数。"""
+    base = (
+        "SELECT b.id, u.name AS user_name, b.created_at, COUNT(h.id) AS article_count "
+        "FROM push_batches b "
+        "JOIN users u ON b.user_id = u.id "
+        "LEFT JOIN user_article_history h ON h.batch_id = b.id "
+    )
+    params = []
+    if user_id:
+        base += "WHERE b.user_id = ? "
+        params.append(user_id)
+    base += "GROUP BY b.id ORDER BY b.created_at DESC"
+    return conn.execute(base, params).fetchall()
