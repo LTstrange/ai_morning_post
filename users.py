@@ -124,5 +124,7 @@ def generate_for_users(conn, user_filter=None, gen_report=True, gen_voice=True, 
                     voice_path.write_text(voice_script, encoding="utf-8")
             audio_path = REPORTS_DIR / f"{today}-{user_name}-voice.wav"
             print(f"  [{user_name}] 正在生成语音音频...")
-            text_to_speech(voice_script, audio_path)
-            print(f"  [{user_name}] 语音音频已生成: {audio_path}")
+            if text_to_speech(voice_script, audio_path):
+                print(f"  [{user_name}] 语音音频已生成: {audio_path}")
+            else:
+                print(f"  [{user_name}] 语音音频生成失败")
