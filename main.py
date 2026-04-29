@@ -2,7 +2,15 @@
 
 import argparse
 
-from commands import cmd_fetch, cmd_parse, cmd_regen, cmd_history, cmd_run, cmd_migrate, cmd_user
+from commands import (
+    cmd_fetch,
+    cmd_parse,
+    cmd_regen,
+    cmd_history,
+    cmd_run,
+    cmd_migrate,
+    cmd_user,
+)
 
 
 def main():
@@ -70,9 +78,7 @@ def main():
 
     # user 子命令
     user_parser = subparsers.add_parser("user", help="管理用户与订阅")
-    user_subparsers = user_parser.add_subparsers(
-        dest="user_action", help="用户操作"
-    )
+    user_subparsers = user_parser.add_subparsers(dest="user_action", help="用户操作")
 
     # user add
     user_add_parser = user_subparsers.add_parser("add", help="添加用户")

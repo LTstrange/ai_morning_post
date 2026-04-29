@@ -51,7 +51,8 @@ def migrate(conn):
         return
 
     migration_files = sorted(
-        f for f in MIGRATIONS_DIR.iterdir()
+        f
+        for f in MIGRATIONS_DIR.iterdir()
         if f.suffix == ".sql" and f.name[0].isdigit()
     )
 
@@ -60,9 +61,7 @@ def migrate(conn):
         if version > current_version:
             sql = mf.read_text(encoding="utf-8")
             conn.executescript(sql)
-            conn.execute(
-                "INSERT INTO schema_version (version) VALUES (?)", (version,)
-            )
+            conn.execute("INSERT INTO schema_version (version) VALUES (?)", (version,))
             conn.commit()
             print(f"  [迁移] 已应用版本 {version}: {mf.name}")
 
@@ -483,9 +482,7 @@ def set_user_subscriptions(conn, user_id, feed_names):
 
 def add_subscription(conn, user_id, feed_name):
     """添加单个订阅。返回 feed_id 或 None。"""
-    feed = conn.execute(
-        "SELECT id FROM feeds WHERE name = ?", (feed_name,)
-    ).fetchone()
+    feed = conn.execute("SELECT id FROM feeds WHERE name = ?", (feed_name,)).fetchone()
     if not feed:
         return None
     conn.execute(
@@ -498,9 +495,7 @@ def add_subscription(conn, user_id, feed_name):
 
 def remove_subscription(conn, user_id, feed_name):
     """移除单个订阅。返回 feed_id 或 None。"""
-    feed = conn.execute(
-        "SELECT id FROM feeds WHERE name = ?", (feed_name,)
-    ).fetchone()
+    feed = conn.execute("SELECT id FROM feeds WHERE name = ?", (feed_name,)).fetchone()
     if not feed:
         return None
     conn.execute(

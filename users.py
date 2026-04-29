@@ -153,9 +153,7 @@ def generate_for_users(
             print(f'未找到用户 "{user_filter}"，跳过早报生成')
             return
     else:
-        users = conn.execute(
-            "SELECT id, name FROM users WHERE active = 1"
-        ).fetchall()
+        users = conn.execute("SELECT id, name FROM users WHERE active = 1").fetchall()
 
     for user in users:
         user_id, user_name = user["id"], user["name"]
