@@ -1,13 +1,15 @@
 """RSS 数据获取和解析模块。"""
 
 import json
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
-from pathlib import Path
 
 import feedparser
 import requests
 
-from db import ensure_feed, save_raw_feed, save_article
+from db import ensure_feed, get_latest_raw_feed, save_raw_feed, save_article
+
+CACHE_TTL = timedelta(hours=24)
 
 
 def load_feeds(path="feeds.json"):
@@ -47,32 +49,34 @@ def parse_entry(entry):
 
 
 def fetch_and_store_raw_feeds(conn):
-    """遍历所有 feed 源，读取本地 XML（无则从 URL 下载），存入 raw_feeds 表。"""
+    """遍历所有 feed 源，从 URL 拉取 RSS 存入 raw_feeds 表（24 小时内缓存有效则跳过）。"""
     feeds = load_feeds()
+    now = datetime.now(timezone.utc)
+
     for feed_cfg in feeds:
         name = feed_cfg["name"]
         url = feed_cfg["url"]
 
         feed_id = ensure_feed(conn, name, url)
 
-        toc_file = Path("output") / Path(url).stem.upper()
-        toc_file = toc_file.with_suffix(".xml")
-
-        if toc_file.exists():
-            raw_xml = toc_file.read_text(encoding="utf-8")
-        else:
-            print(f"  [下载] {name} -> {url}")
-            try:
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-                }
-                resp = requests.get(url, headers=headers, timeout=30)
-                resp.raise_for_status()
-                raw_xml = resp.text
-                toc_file.write_text(raw_xml, encoding="utf-8")
-            except Exception as e:
-                print(f"  [错误] {name} 下载失败: {e}")
+        latest_fetched_at = get_latest_raw_feed(conn, feed_id)
+        if latest_fetched_at:
+            fetched_time = datetime.fromisoformat(latest_fetched_at).replace(tzinfo=timezone.utc)
+            if now - fetched_time < CACHE_TTL:
+                print(f"  [跳过] {name} -> 缓存未过期（{latest_fetched_at}）")
                 continue
+
+        print(f"  [下载] {name} -> {url}")
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            }
+            resp = requests.get(url, headers=headers, timeout=30)
+            resp.raise_for_status()
+            raw_xml = resp.text
+        except Exception as e:
+            print(f"  [错误] {name} 下载失败: {e}")
+            continue
 
         parsed = feedparser.parse(raw_xml)
         feed_title = parsed.feed.get("title", "")

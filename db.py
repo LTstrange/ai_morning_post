@@ -83,6 +83,15 @@ def ensure_feed(conn, name, url):
     return cur.lastrowid
 
 
+def get_latest_raw_feed(conn, feed_id):
+    """获取该 feed 最近一次拉取的时间，不存在则返回 None。"""
+    row = conn.execute(
+        "SELECT fetched_at FROM raw_feeds WHERE feed_id = ? ORDER BY fetched_at DESC LIMIT 1",
+        (feed_id,),
+    ).fetchone()
+    return row["fetched_at"] if row else None
+
+
 def save_raw_feed(conn, feed_id, raw_content):
     """保存原始 RSS 内容，内容相同则跳过。返回是否实际插入。"""
     content_hash = hashlib.sha256(raw_content.encode("utf-8")).hexdigest()
