@@ -78,7 +78,7 @@ uv run python migrate.py         # 同上（独立入口）
 - `migrate.py` — 独立迁移入口脚本；调用 db.migrate() 执行所有未应用的迁移
 - `migrations/` — SQL 迁移文件目录（按 `NNN_description.sql` 命名，如 `001_initial.sql`）
 - `feeds.json` — feed 源配置（name + url）
-- `users.json` — 用户与订阅配置（name + subscriptions，subscriptions 用期刊名匹配 feeds 表）
+- `users.json` — 用户与订阅配置（name + subscriptions + interests，interests 用于辅助 AI 筛选文章）
 - `.env` — 环境变量（`DEEPSEEK_API_KEY`、`MIMO_API_KEY`，已加入 .gitignore）
 - `prompts/` — LLM 提示词文件（`report_system.txt` 和 `voice_system.txt` 和 `select_system.txt`，修改提示词只需编辑这三个文件）
 - `reports/` — 生成的早报输出目录（`YYYY-MM-DD.md` + `YYYY-MM-DD-voice.txt` + `YYYY-MM-DD-voice.wav`，已加入 .gitignore）
@@ -100,7 +100,7 @@ main.py
   - `feeds` — RSS 源信息（name, url）
   - `raw_feeds` — 每次拉取的原始 XML（SHA-256 去重）
   - `articles` — 解析后的文章（link UNIQUE 去重，published 为 ISO 8601 格式，authors 为 JSON 数组）
-  - `users` — 用户（name UNIQUE）
+  - `users` — 用户（name UNIQUE, active BOOLEAN, interests TEXT）
   - `subscriptions` — 用户与 feed 的多对多订阅关系（UNIQUE(user_id, feed_id)）
   - `push_batches` — 推送批次（user_id, created_at, report, voice_script, tts_audio_path），每次 run 为每个用户创建一个批次
   - `user_article_history` — 用户推送历史（batch_id 外键 ON DELETE CASCADE，UNIQUE(user_id, article_id)）

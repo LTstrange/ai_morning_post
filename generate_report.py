@@ -60,11 +60,17 @@ def fetch_candidate_articles(conn, user_id, today, target_count=10):
     return candidates, today_articles
 
 
-def build_selection_prompt(candidates):
+def build_selection_prompt(candidates, interests=None):
     """将候选文章列表组装为发给 LLM 的选择 prompt。"""
-    lines = [
-        f"以下是 {len(candidates)} 篇候选论文，请从中选择 2-3 篇最值得推荐的论文：\n"
-    ]
+    if interests:
+        lines = [
+            f"以下是 {len(candidates)} 篇候选论文，请从中选择 2-3 篇最值得推荐的论文。\n",
+            f"用户的研究兴趣为：{interests}\n",
+        ]
+    else:
+        lines = [
+            f"以下是 {len(candidates)} 篇候选论文，请从中选择 2-3 篇最值得推荐的论文：\n"
+        ]
 
     for i, a in enumerate(candidates):
         authors = ", ".join(json.loads(a["authors"]))
@@ -79,12 +85,12 @@ def build_selection_prompt(candidates):
     return "\n".join(lines)
 
 
-def select_articles(candidates):
+def select_articles(candidates, interests=None):
     """调用 LLM 从候选文章中选择 2-3 篇，返回选中的文章列表。"""
     if len(candidates) <= 3:
         return candidates
 
-    selection_prompt = build_selection_prompt(candidates)
+    selection_prompt = build_selection_prompt(candidates, interests)
     response = call_llm(SELECT_SYSTEM_PROMPT, selection_prompt)
 
     try:

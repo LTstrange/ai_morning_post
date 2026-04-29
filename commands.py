@@ -19,6 +19,7 @@ from db import (
     add_subscription,
     remove_subscription,
     get_user_subscriptions,
+    set_user_interests,
 )
 from rss import fetch_and_store_raw_feeds, parse_and_store_articles
 from users import init_connection, sync_users, generate_for_users, generate_from_batch
@@ -350,13 +351,15 @@ def cmd_user(args):
             user_id = ensure_user(conn, name)
             activate_user(conn, user_id)
             set_user_subscriptions(conn, user_id, uc.get("subscriptions", []))
+            if "interests" in uc:
+                set_user_interests(conn, user_id, uc["interests"])
             print(
                 f'已恢复用户 "{name}" 的配置 ({len(uc.get("subscriptions", []))} 个订阅)'
             )
 
     elif args.user_action == "export":
         users = conn.execute(
-            "SELECT id, name FROM users WHERE active = 1 ORDER BY name"
+            "SELECT id, name, interests FROM users WHERE active = 1 ORDER BY name"
         ).fetchall()
         if not users:
             print("没有活跃用户可导出")
@@ -364,12 +367,13 @@ def cmd_user(args):
             export_data = {"users": []}
             for u in users:
                 subs = get_user_subscriptions(conn, u["id"])
-                export_data["users"].append(
-                    {
-                        "name": u["name"],
-                        "subscriptions": [s["name"] for s in subs],
-                    }
-                )
+                user_entry = {
+                    "name": u["name"],
+                    "subscriptions": [s["name"] for s in subs],
+                }
+                if u["interests"]:
+                    user_entry["interests"] = u["interests"]
+                export_data["users"].append(user_entry)
             with open(args.file, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, ensure_ascii=False, indent=2)
             print(f"已导出 {len(users)} 个用户到 {args.file}")

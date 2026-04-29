@@ -17,6 +17,7 @@ from db import (
     update_batch_report,
     update_batch_voice,
     update_batch_tts,
+    set_user_interests,
 )
 from generate_report import (
     build_user_prompt,
@@ -47,6 +48,14 @@ def sync_users(conn, filepath="users.json"):
             added = ensure_subscription(conn, user_id, row["id"])
             if added:
                 print(f"  [新增] {user_cfg['name']} -> {feed_name}")
+        # 增量导入兴趣：已有则不覆盖
+        if "interests" in user_cfg:
+            existing = conn.execute(
+                "SELECT interests FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+            if not existing["interests"]:
+                set_user_interests(conn, user_id, user_cfg["interests"])
+                print(f"  [新增] {user_cfg['name']} 的研究兴趣")
 
 
 def init_connection():
@@ -147,16 +156,18 @@ def generate_for_users(
 
     if user_filter:
         users = conn.execute(
-            "SELECT id, name FROM users WHERE name = ?", (user_filter,)
+            "SELECT id, name, interests FROM users WHERE name = ?", (user_filter,)
         ).fetchall()
         if not users:
             print(f'未找到用户 "{user_filter}"，跳过早报生成')
             return
     else:
-        users = conn.execute("SELECT id, name FROM users WHERE active = 1").fetchall()
+        users = conn.execute(
+            "SELECT id, name, interests FROM users WHERE active = 1"
+        ).fetchall()
 
     for user in users:
-        user_id, user_name = user["id"], user["name"]
+        user_id, user_name, interests = user["id"], user["name"], user["interests"]
 
         print(f"  [{user_name}] 正在筛选候选文章...")
         candidates, today_articles = fetch_candidate_articles(conn, user_id, today)
@@ -171,7 +182,7 @@ def generate_for_users(
         )
 
         print(f"  [{user_name}] 正在选择推荐文章...")
-        selected = select_articles(candidates)
+        selected = select_articles(candidates, interests)
         print(f"  [{user_name}] 已选择 {len(selected)} 篇推荐文章")
 
         if not dry_run:

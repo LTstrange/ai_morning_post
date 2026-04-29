@@ -514,3 +514,12 @@ def get_user_subscriptions(conn, user_id):
         "WHERE s.user_id = ? ORDER BY f.name",
         (user_id,),
     ).fetchall()
+
+
+def set_user_interests(conn, user_id, interests):
+    """设置用户研究兴趣文本。"""
+    conn.execute(
+        "UPDATE users SET interests = ? WHERE id = ?",
+        (interests, user_id),
+    )
+    conn.commit()
