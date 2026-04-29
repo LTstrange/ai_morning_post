@@ -9,7 +9,6 @@
 ```
 # 子命令用法
 uv run python main.py fetch      # 从 URL 拉取 RSS 存入数据库（23 小时内缓存有效则跳过）
-uv run python main.py sync       # 同步用户与订阅
 uv run python main.py parse      # 解析并存储文章
 uv run python main.py run        # 执行完整流程（fetch + sync + parse + 选文 + 生成）
 
@@ -19,6 +18,19 @@ uv run python main.py run --report             # 只生成 Markdown 早报
 uv run python main.py run --voice              # 只生成语音播报稿
 uv run python main.py run --tts                # 生成语音音频（需要 MIMO_API_KEY）
 uv run python main.py run --dry-run            # 模拟运行，不标记文章为已推送
+
+# 用户管理
+uv run python main.py user add Alice           # 添加用户（已存在则跳过）
+uv run python main.py user remove Alice        # 硬删除用户（级联删除全部数据）
+uv run python main.py user deactivate Alice    # 停用用户（保留数据）
+uv run python main.py user list                # 列出所有用户
+uv run python main.py user show Alice          # 查看用户详情和订阅
+uv run python main.py user subscribe Alice "IEEE TMM"    # 添加订阅
+uv run python main.py user unsubscribe Alice "IEEE TMM"  # 取消订阅
+uv run python main.py user sync                # 增量导入（默认 users.json）
+uv run python main.py user sync custom.json    # 从指定文件增量导入
+uv run python main.py user restore file.json   # 覆盖导入（按人覆盖订阅 + 激活用户）
+uv run python main.py user export out.json      # 导出现有用户到文件
 
 # 基于已有批次重新生成（跳过选文流程）
 uv run python main.py regen 5                  # 用批次 #5 的数据生成早报+语音稿

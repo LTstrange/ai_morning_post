@@ -426,3 +426,96 @@ def update_batch_tts(conn, batch_id, tts_audio_path):
         (str(tts_audio_path), batch_id),
     )
     conn.commit()
+
+
+def add_user(conn, name):
+    """创建新用户。已存在（无论 active 状态）则跳过，返回 None。"""
+    exists = conn.execute("SELECT id FROM users WHERE name = ?", (name,)).fetchone()
+    if exists:
+        return None
+    cur = conn.execute("INSERT INTO users (name) VALUES (?)", (name,))
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_user(conn, name):
+    """按名称查找用户，返回完整 row 或 None。"""
+    return conn.execute("SELECT * FROM users WHERE name = ?", (name,)).fetchone()
+
+
+def activate_user(conn, user_id):
+    """激活用户（active = 1）。"""
+    conn.execute("UPDATE users SET active = 1 WHERE id = ?", (user_id,))
+    conn.commit()
+
+
+def deactivate_user(conn, user_id):
+    """停用用户，保留数据和订阅。"""
+    conn.execute("UPDATE users SET active = 0 WHERE id = ?", (user_id,))
+    conn.commit()
+
+
+def remove_user(conn, user_id):
+    """硬删除用户，级联删除订阅、推送批次、推送历史。"""
+    conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+
+
+def list_users(conn):
+    """列出所有用户。"""
+    return conn.execute("SELECT * FROM users ORDER BY name").fetchall()
+
+
+def set_user_subscriptions(conn, user_id, feed_names):
+    """原子替换用户的订阅列表。"""
+    conn.execute("DELETE FROM subscriptions WHERE user_id = ?", (user_id,))
+    for feed_name in feed_names:
+        feed = conn.execute(
+            "SELECT id FROM feeds WHERE name = ?", (feed_name,)
+        ).fetchone()
+        if feed:
+            conn.execute(
+                "INSERT OR IGNORE INTO subscriptions (user_id, feed_id) VALUES (?, ?)",
+                (user_id, feed["id"]),
+            )
+    conn.commit()
+
+
+def add_subscription(conn, user_id, feed_name):
+    """添加单个订阅。返回 feed_id 或 None。"""
+    feed = conn.execute(
+        "SELECT id FROM feeds WHERE name = ?", (feed_name,)
+    ).fetchone()
+    if not feed:
+        return None
+    conn.execute(
+        "INSERT OR IGNORE INTO subscriptions (user_id, feed_id) VALUES (?, ?)",
+        (user_id, feed["id"]),
+    )
+    conn.commit()
+    return feed["id"]
+
+
+def remove_subscription(conn, user_id, feed_name):
+    """移除单个订阅。返回 feed_id 或 None。"""
+    feed = conn.execute(
+        "SELECT id FROM feeds WHERE name = ?", (feed_name,)
+    ).fetchone()
+    if not feed:
+        return None
+    conn.execute(
+        "DELETE FROM subscriptions WHERE user_id = ? AND feed_id = ?",
+        (user_id, feed["id"]),
+    )
+    conn.commit()
+    return feed["id"]
+
+
+def get_user_subscriptions(conn, user_id):
+    """获取用户订阅列表。"""
+    return conn.execute(
+        "SELECT f.name, f.url FROM subscriptions s "
+        "JOIN feeds f ON s.feed_id = f.id "
+        "WHERE s.user_id = ? ORDER BY f.name",
+        (user_id,),
+    ).fetchall()

@@ -1,0 +1,2 @@
+ALTER TABLE users ADD COLUMN active BOOLEAN DEFAULT 1;
+UPDATE users SET active = 1 WHERE active IS NULL;

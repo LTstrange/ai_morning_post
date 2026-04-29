@@ -29,9 +29,9 @@ from generate_report import (
 from tts import text_to_speech
 
 
-def sync_users(conn):
-    """从 users.json 同步用户和订阅关系到数据库。"""
-    with open("users.json") as f:
+def sync_users(conn, filepath="users.json"):
+    """从 JSON 文件同步用户和订阅关系到数据库。"""
+    with open(filepath) as f:
         users_cfg = json.load(f)["users"]
     for user_cfg in users_cfg:
         user_id = ensure_user(conn, user_cfg["name"])
@@ -153,7 +153,9 @@ def generate_for_users(
             print(f'未找到用户 "{user_filter}"，跳过早报生成')
             return
     else:
-        users = conn.execute("SELECT id, name FROM users").fetchall()
+        users = conn.execute(
+            "SELECT id, name FROM users WHERE active = 1"
+        ).fetchall()
 
     for user in users:
         user_id, user_name = user["id"], user["name"]

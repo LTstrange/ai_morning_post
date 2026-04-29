@@ -1,6 +1,26 @@
 """子命令处理模块。"""
 
-from db import reset_user_history, get_user_history, get_push_batches, migrate, get_connection
+import json
+
+from db import (
+    reset_user_history,
+    get_user_history,
+    get_push_batches,
+    migrate,
+    get_connection,
+    add_user,
+    get_user,
+    activate_user,
+    deactivate_user,
+    remove_user,
+    list_users,
+    ensure_user,
+    ensure_subscription,
+    set_user_subscriptions,
+    add_subscription,
+    remove_subscription,
+    get_user_subscriptions,
+)
 from rss import fetch_and_store_raw_feeds, parse_and_store_articles
 from users import init_connection, sync_users, generate_for_users, generate_from_batch
 
@@ -10,14 +30,6 @@ def cmd_fetch(args):
     conn = init_connection()
     print("=== 拉取并存储 RSS 原始内容 ===")
     fetch_and_store_raw_feeds(conn, force=args.force)
-    conn.close()
-
-
-def cmd_sync(args):
-    """处理 sync 子命令。"""
-    conn = init_connection()
-    print("=== 同步用户与订阅 ===")
-    sync_users(conn)
     conn.close()
 
 
@@ -208,3 +220,150 @@ def cmd_migrate(args):
     migrate(conn)
     conn.close()
     print("迁移完成。")
+
+
+def _resolve_target_user(conn, username):
+    """查找目标用户，未找到时打印提示并返回 None。"""
+    user = get_user(conn, username)
+    if not user:
+        print(f'未找到用户 "{username}"')
+    return user
+
+
+def _find_feed(conn, feed_name):
+    """查找 feed，未找到时打印提示并返回 None。"""
+    feed = conn.execute(
+        "SELECT id FROM feeds WHERE name = ?", (feed_name,)
+    ).fetchone()
+    if not feed:
+        print(f'未找到期刊 "{feed_name}"，请先运行 fetch')
+    return feed
+
+
+def _load_user_file(filepath):
+    """加载用户配置文件，返回 users 列表。"""
+    with open(filepath) as f:
+        data = json.load(f)
+    return data.get("users", data) if isinstance(data, dict) else data
+
+
+def cmd_user(args):
+    """处理 user 子命令。"""
+    conn = init_connection()
+
+    if args.user_action == "add":
+        user_id = add_user(conn, args.username)
+        if user_id:
+            print(f'已创建用户 "{args.username}"')
+        else:
+            print(f'用户 "{args.username}" 已存在，跳过')
+
+    elif args.user_action == "remove":
+        user = _resolve_target_user(conn, args.username)
+        if user:
+            remove_user(conn, user["id"])
+            print(f'用户 "{args.username}" 及其全部数据已删除')
+
+    elif args.user_action == "deactivate":
+        user = _resolve_target_user(conn, args.username)
+        if user:
+            if not user["active"]:
+                print(f'用户 "{args.username}" 已在停用状态，无需操作')
+            else:
+                deactivate_user(conn, user["id"])
+                print(f'用户 "{args.username}" 已停用')
+
+    elif args.user_action == "list":
+        users = list_users(conn)
+        if not users:
+            print("暂无用户")
+        else:
+            for u in users:
+                status = "" if u["active"] else " [已停用]"
+                sub_count = conn.execute(
+                    "SELECT COUNT(*) FROM subscriptions WHERE user_id = ?",
+                    (u["id"],),
+                ).fetchone()[0]
+                print(f"  {u['name']}{status} ({sub_count} 个订阅)")
+
+    elif args.user_action == "show":
+        user = _resolve_target_user(conn, args.username)
+        if user:
+            status = "活跃" if user["active"] else "已停用"
+            print(f"用户: {user['name']}")
+            print(f"状态: {status}")
+            print(f"创建时间: {user['created_at']}")
+            subs = get_user_subscriptions(conn, user["id"])
+            if not subs:
+                print("订阅: 无")
+            else:
+                print("订阅:")
+                for s in subs:
+                    print(f"  - {s['name']}")
+
+    elif args.user_action == "subscribe":
+        user = _resolve_target_user(conn, args.username)
+        if user:
+            feed_name = getattr(args, "feed_name", None)
+            feed = _find_feed(conn, feed_name)
+            if feed:
+                result = add_subscription(conn, user["id"], feed_name)
+                if result:
+                    print(f'已为用户 "{args.username}" 添加订阅: {feed_name}')
+                else:
+                    print(f'订阅已存在: {feed_name}')
+
+    elif args.user_action == "unsubscribe":
+        user = _resolve_target_user(conn, args.username)
+        if user:
+            feed_name = getattr(args, "feed_name", None)
+            result = remove_subscription(conn, user["id"], feed_name)
+            if result:
+                print(f'已为用户 "{args.username}" 取消订阅: {feed_name}')
+            else:
+                print(f'未找到该订阅: {feed_name}')
+
+    elif args.user_action == "sync":
+        filepath = getattr(args, "file", "users.json")
+        try:
+            sync_users(conn, filepath)
+        except FileNotFoundError:
+            print(f"文件不存在: {filepath}")
+
+    elif args.user_action == "restore":
+        filepath = args.file
+        try:
+            users_data = _load_user_file(filepath)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"加载文件失败: {e}")
+            conn.close()
+            return
+
+        for uc in users_data:
+            name = uc["name"]
+            user_id = ensure_user(conn, name)
+            activate_user(conn, user_id)
+            set_user_subscriptions(
+                conn, user_id, uc.get("subscriptions", [])
+            )
+            print(f'已恢复用户 "{name}" 的配置 ({len(uc.get("subscriptions", []))} 个订阅)')
+
+    elif args.user_action == "export":
+        users = conn.execute(
+            "SELECT id, name FROM users WHERE active = 1 ORDER BY name"
+        ).fetchall()
+        if not users:
+            print("没有活跃用户可导出")
+        else:
+            export_data = {"users": []}
+            for u in users:
+                subs = get_user_subscriptions(conn, u["id"])
+                export_data["users"].append({
+                    "name": u["name"],
+                    "subscriptions": [s["name"] for s in subs],
+                })
+            with open(args.file, "w", encoding="utf-8") as f:
+                json.dump(export_data, f, ensure_ascii=False, indent=2)
+            print(f"已导出 {len(users)} 个用户到 {args.file}")
+
+    conn.close()

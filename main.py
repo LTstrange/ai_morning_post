@@ -2,7 +2,7 @@
 
 import argparse
 
-from commands import cmd_fetch, cmd_sync, cmd_parse, cmd_regen, cmd_history, cmd_run, cmd_migrate
+from commands import cmd_fetch, cmd_parse, cmd_regen, cmd_history, cmd_run, cmd_migrate, cmd_user
 
 
 def main():
@@ -14,9 +14,6 @@ def main():
     fetch_parser.add_argument(
         "-f", "--force", action="store_true", help="忽略缓存，强制重新拉取"
     )
-
-    # sync 子命令
-    subparsers.add_parser("sync", help="同步用户与订阅")
 
     # parse 子命令
     subparsers.add_parser("parse", help="解析并存储文章")
@@ -71,6 +68,55 @@ def main():
         "username", nargs="?", help="指定用户名（留空查看所有）"
     )
 
+    # user 子命令
+    user_parser = subparsers.add_parser("user", help="管理用户与订阅")
+    user_subparsers = user_parser.add_subparsers(
+        dest="user_action", help="用户操作"
+    )
+
+    # user add
+    user_add_parser = user_subparsers.add_parser("add", help="添加用户")
+    user_add_parser.add_argument("username", help="用户名")
+
+    # user remove
+    user_remove_parser = user_subparsers.add_parser("remove", help="硬删除用户")
+    user_remove_parser.add_argument("username", help="用户名")
+
+    # user deactivate
+    user_deactivate_parser = user_subparsers.add_parser("deactivate", help="停用用户")
+    user_deactivate_parser.add_argument("username", help="用户名")
+
+    # user list
+    user_subparsers.add_parser("list", help="列出所有用户")
+
+    # user show
+    user_show_parser = user_subparsers.add_parser("show", help="查看用户详情")
+    user_show_parser.add_argument("username", help="用户名")
+
+    # user subscribe
+    user_subscribe_parser = user_subparsers.add_parser("subscribe", help="添加订阅")
+    user_subscribe_parser.add_argument("username", help="用户名")
+    user_subscribe_parser.add_argument("feed_name", help="期刊名称")
+
+    # user unsubscribe
+    user_unsubscribe_parser = user_subparsers.add_parser("unsubscribe", help="取消订阅")
+    user_unsubscribe_parser.add_argument("username", help="用户名")
+    user_unsubscribe_parser.add_argument("feed_name", help="期刊名称")
+
+    # user sync
+    user_sync_parser = user_subparsers.add_parser("sync", help="从文件增量导入")
+    user_sync_parser.add_argument(
+        "file", nargs="?", default="users.json", help="配置文件路径（默认 users.json）"
+    )
+
+    # user restore
+    user_restore_parser = user_subparsers.add_parser("restore", help="从文件覆盖导入")
+    user_restore_parser.add_argument("file", help="配置文件路径")
+
+    # user export
+    user_export_parser = user_subparsers.add_parser("export", help="导出用户配置到文件")
+    user_export_parser.add_argument("file", help="输出文件路径")
+
     # migrate 子命令
     subparsers.add_parser("migrate", help="执行所有未应用的数据库迁移")
 
@@ -97,8 +143,6 @@ def main():
     # 根据子命令调用相应的处理函数
     if args.command == "fetch":
         cmd_fetch(args)
-    elif args.command == "sync":
-        cmd_sync(args)
     elif args.command == "parse":
         cmd_parse(args)
     elif args.command == "regen":
@@ -108,6 +152,11 @@ def main():
             history_parser.print_help()
             return
         cmd_history(args)
+    elif args.command == "user":
+        if not args.user_action:
+            user_parser.print_help()
+            return
+        cmd_user(args)
     elif args.command == "migrate":
         cmd_migrate(args)
     elif args.command == "run":
