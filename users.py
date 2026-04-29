@@ -50,7 +50,14 @@ def init_connection():
     return get_connection()
 
 
-def generate_for_users(conn, user_filter=None, gen_report=True, gen_voice=True, gen_tts=False, dry_run=False):
+def generate_for_users(
+    conn,
+    user_filter=None,
+    gen_report=True,
+    gen_voice=True,
+    gen_tts=False,
+    dry_run=False,
+):
     """为用户生成早报内容的核心逻辑。"""
     load_dotenv()
     REPORTS_DIR.mkdir(exist_ok=True)
@@ -93,7 +100,9 @@ def generate_for_users(conn, user_filter=None, gen_report=True, gen_voice=True, 
             batch_id = create_push_batch(conn, user_id)
             for article in selected:
                 mark_article_pushed(conn, user_id, article["id"], batch_id)
-            print(f"  [{user_name}] 已标记 {len(selected)} 篇文章为已推送（批次 #{batch_id}）")
+            print(
+                f"  [{user_name}] 已标记 {len(selected)} 篇文章为已推送（批次 #{batch_id}）"
+            )
         else:
             print(f"  [{user_name}] [DRY RUN] 跳过标记已推送文章")
 

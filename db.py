@@ -274,7 +274,9 @@ def get_unpushed_all_articles(conn, user_id, exclude_ids, limit):
     return rows
 
 
-def reset_user_history(conn, user_id=None, batch_id=None, date_str=None, after_date=None):
+def reset_user_history(
+    conn, user_id=None, batch_id=None, date_str=None, after_date=None
+):
     """重置用户推送历史。通过删除 push_batches 级联清理 history。
 
     - user_id: 限定用户
@@ -313,7 +315,9 @@ def reset_user_history(conn, user_id=None, batch_id=None, date_str=None, after_d
     conn.commit()
 
 
-def get_user_history(conn, user_id=None, batch_id=None, date_str=None, date_from=None, date_to=None):
+def get_user_history(
+    conn, user_id=None, batch_id=None, date_str=None, date_from=None, date_to=None
+):
     """获取用户推送历史。
 
     - user_id: 限定用户

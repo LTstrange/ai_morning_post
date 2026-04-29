@@ -13,7 +13,9 @@ DEFAULT_VOICE = "冰糖"
 STYLE_INSTRUCTION = "温暖、自然的早间新闻播报风格，语速适中，吐字清晰。"
 
 
-def text_to_speech(text, output_path, voice=DEFAULT_VOICE, style_instruction=None, max_retries=3):
+def text_to_speech(
+    text, output_path, voice=DEFAULT_VOICE, style_instruction=None, max_retries=3
+):
     """
     将文本转为语音并保存为WAV文件。
 
@@ -59,7 +61,9 @@ def text_to_speech(text, output_path, voice=DEFAULT_VOICE, style_instruction=Non
 
             audio_data = audio.data
             if not audio_data:
-                print(f"  [重试] 第 {attempt + 1}/{max_retries} 次失败，音频数据为空字符串")
+                print(
+                    f"  [重试] 第 {attempt + 1}/{max_retries} 次失败，音频数据为空字符串"
+                )
                 continue
 
             audio_bytes = base64.b64decode(audio_data)

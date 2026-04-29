@@ -32,7 +32,7 @@ def cmd_parse(args):
 def cmd_generate(args):
     """处理 generate 子命令。"""
     conn = init_connection()
-    
+
     # 如果 report/voice/tts 都没指定，默认生成 report 和 voice
     any_flag = args.report or args.voice or args.tts
     gen_report = args.report if any_flag else True
@@ -46,7 +46,7 @@ def cmd_generate(args):
         gen_report=gen_report,
         gen_voice=gen_voice,
         gen_tts=gen_tts,
-        dry_run=args.dry_run
+        dry_run=args.dry_run,
     )
     conn.close()
 
@@ -55,9 +55,7 @@ def _resolve_user(conn, username):
     """根据用户名查找用户，未找到时打印提示并返回 None。"""
     if not username:
         return None
-    user = conn.execute(
-        "SELECT id FROM users WHERE name = ?", (username,)
-    ).fetchone()
+    user = conn.execute("SELECT id FROM users WHERE name = ?", (username,)).fetchone()
     if not user:
         print(f'未找到用户 "{username}"')
     return user
@@ -92,14 +90,20 @@ def cmd_history(args):
         print(f"=== {label} 的推送历史 ===")
 
         history = get_user_history(
-            conn, user_id=user_id, batch_id=batch_id,
-            date_str=date_str, date_from=date_from, date_to=date_to,
+            conn,
+            user_id=user_id,
+            batch_id=batch_id,
+            date_str=date_str,
+            date_from=date_from,
+            date_to=date_to,
         )
         if not history:
             print("暂无推送记录")
         else:
             for h in history:
-                print(f"  [批次 #{h['batch_id']}] [{h['user_name']}] {h['title']} ({h['pushed_at']})")
+                print(
+                    f"  [批次 #{h['batch_id']}] [{h['user_name']}] {h['title']} ({h['pushed_at']})"
+                )
 
     elif args.history_action == "reset":
         user = _resolve_user(conn, getattr(args, "username", None))
@@ -113,8 +117,11 @@ def cmd_history(args):
         after_date = getattr(args, "after", None)
 
         reset_user_history(
-            conn, user_id=user_id, batch_id=batch_id,
-            date_str=date_str, after_date=after_date,
+            conn,
+            user_id=user_id,
+            batch_id=batch_id,
+            date_str=date_str,
+            after_date=after_date,
         )
 
         desc_parts = []
@@ -144,7 +151,9 @@ def cmd_history(args):
             print("暂无批次记录")
         else:
             for b in batches:
-                print(f"  批次 #{b['id']} [{b['user_name']}] {b['created_at']} ({b['article_count']} 篇文章)")
+                print(
+                    f"  批次 #{b['id']} [{b['user_name']}] {b['created_at']} ({b['article_count']} 篇文章)"
+                )
 
     conn.close()
 
@@ -152,7 +161,7 @@ def cmd_history(args):
 def cmd_run(args):
     """处理 run 子命令。"""
     conn = init_connection()
-    
+
     # 如果 report/voice/tts 都没指定，默认生成 report 和 voice
     any_flag = args.report or args.voice or args.tts
     gen_report = args.report if any_flag else True
@@ -178,7 +187,7 @@ def cmd_run(args):
         gen_report=gen_report,
         gen_voice=gen_voice,
         gen_tts=gen_tts,
-        dry_run=args.dry_run
+        dry_run=args.dry_run,
     )
     print()
     conn.close()
