@@ -273,6 +273,15 @@ def cmd_user(args):
                 deactivate_user(conn, user["id"])
                 print(f'用户 "{args.username}" 已停用')
 
+    elif args.user_action == "activate":
+        user = _resolve_target_user(conn, args.username)
+        if user:
+            if user["active"]:
+                print(f'用户 "{args.username}" 已在活跃状态，无需操作')
+            else:
+                activate_user(conn, user["id"])
+                print(f'用户 "{args.username}" 已激活')
+
     elif args.user_action == "list":
         users = list_users(conn)
         if not users:

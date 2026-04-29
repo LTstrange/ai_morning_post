@@ -86,6 +86,10 @@ def main():
     user_deactivate_parser = user_subparsers.add_parser("deactivate", help="停用用户")
     user_deactivate_parser.add_argument("username", help="用户名")
 
+    # user activate
+    user_activate_parser = user_subparsers.add_parser("activate", help="激活用户")
+    user_activate_parser.add_argument("username", help="用户名")
+
     # user list
     user_subparsers.add_parser("list", help="列出所有用户")
 
