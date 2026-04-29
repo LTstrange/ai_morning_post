@@ -108,30 +108,42 @@ def generate_for_users(
 
         # 生成报告
         user_prompt = build_user_prompt(today, selected)
+        report_path = REPORTS_DIR / f"{today}-{user_name}.md"
+        report = None
 
         if gen_report:
             print(f"  [{user_name}] 正在生成 Markdown 早报...")
             report = generate_report(user_prompt)
-            report_path = REPORTS_DIR / f"{today}-{user_name}.md"
             report_path.write_text(report, encoding="utf-8")
             print(f"  [{user_name}] 早报已生成: {report_path}")
 
+        if gen_voice or gen_tts:
+            # 语音稿依赖早报文本，确保早报可用
+            if report is None:
+                if report_path.exists():
+                    report = report_path.read_text(encoding="utf-8")
+                    print(f"  [{user_name}] 读取已有早报: {report_path}")
+                else:
+                    print(f"  [{user_name}] 未找到早报，正在生成 Markdown 早报...")
+                    report = generate_report(user_prompt)
+                    report_path.write_text(report, encoding="utf-8")
+                    print(f"  [{user_name}] 早报已生成: {report_path}")
+
         if gen_voice:
             print(f"  [{user_name}] 正在生成语音稿...")
-            voice_script = generate_voice_script(user_prompt)
+            voice_script = generate_voice_script(report, user_prompt)
             voice_path = REPORTS_DIR / f"{today}-{user_name}-voice.txt"
             voice_path.write_text(voice_script, encoding="utf-8")
             print(f"  [{user_name}] 语音稿已生成: {voice_path}")
 
         if gen_tts:
-            # 如果播报稿还没生成，先读取或生成
             if not gen_voice:
                 voice_path = REPORTS_DIR / f"{today}-{user_name}-voice.txt"
                 if voice_path.exists():
                     voice_script = voice_path.read_text(encoding="utf-8")
                 else:
                     print(f"  [{user_name}] 正在生成语音稿...")
-                    voice_script = generate_voice_script(user_prompt)
+                    voice_script = generate_voice_script(report, user_prompt)
                     voice_path.write_text(voice_script, encoding="utf-8")
             audio_path = REPORTS_DIR / f"{today}-{user_name}-voice.wav"
             print(f"  [{user_name}] 正在生成语音音频...")

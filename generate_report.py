@@ -145,6 +145,18 @@ def generate_report(user_prompt):
     return call_llm(REPORT_SYSTEM_PROMPT, user_prompt)
 
 
-def generate_voice_script(user_prompt):
-    """调用 LLM 生成语音播报稿，返回文本。"""
-    return call_llm(VOICE_SYSTEM_PROMPT, user_prompt)
+def generate_voice_script(report, user_prompt):
+    """调用 LLM 生成语音播报稿，返回文本。
+
+    参数：
+    - report: 已生成的 Markdown 早报文本
+    - user_prompt: 原始论文数据 prompt
+    """
+    combined_prompt = (
+        "以下是已生成的早报：\n\n"
+        f"{report}\n\n"
+        "---\n\n"
+        "以下是原始论文数据：\n\n"
+        f"{user_prompt}"
+    )
+    return call_llm(VOICE_SYSTEM_PROMPT, combined_prompt)
