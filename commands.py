@@ -29,17 +29,26 @@ def cmd_parse(args):
     conn.close()
 
 
+def _resolve_gen_flags(args):
+    """解析 report/voice/tts 标志，都未指定时默认生成 report 和 voice。"""
+    any_flag = args.report or args.voice or args.tts
+    return (
+        args.report if any_flag else True,
+        args.voice if any_flag else True,
+        args.tts,
+    )
+
+
 def cmd_generate(args):
     """处理 generate 子命令。"""
     conn = init_connection()
+    gen_report, gen_voice, gen_tts = _resolve_gen_flags(args)
+    batch_id = getattr(args, "batch", None)
 
-    # 如果 report/voice/tts 都没指定，默认生成 report 和 voice
-    any_flag = args.report or args.voice or args.tts
-    gen_report = args.report if any_flag else True
-    gen_voice = args.voice if any_flag else True
-    gen_tts = args.tts
-
-    print("=== 为每位用户生成个人早报 ===")
+    if batch_id:
+        print(f"=== 基于批次 #{batch_id} 生成内容 ===")
+    else:
+        print("=== 为每位用户生成个人早报 ===")
     generate_for_users(
         conn,
         user_filter=args.user,
@@ -47,6 +56,7 @@ def cmd_generate(args):
         gen_voice=gen_voice,
         gen_tts=gen_tts,
         dry_run=args.dry_run,
+        batch_id=batch_id,
     )
     conn.close()
 
@@ -151,8 +161,17 @@ def cmd_history(args):
             print("暂无批次记录")
         else:
             for b in batches:
+                status_parts = []
+                if b["has_report"]:
+                    status_parts.append("早报")
+                if b["has_voice"]:
+                    status_parts.append("语音稿")
+                if b["has_tts"]:
+                    status_parts.append("音频")
+                status = " | ".join(status_parts) if status_parts else "无产物"
                 print(
-                    f"  批次 #{b['id']} [{b['user_name']}] {b['created_at']} ({b['article_count']} 篇文章)"
+                    f"  批次 #{b['id']} [{b['user_name']}] {b['created_at']} "
+                    f"({b['article_count']} 篇文章) [{status}]"
                 )
 
     conn.close()
@@ -161,12 +180,7 @@ def cmd_history(args):
 def cmd_run(args):
     """处理 run 子命令。"""
     conn = init_connection()
-
-    # 如果 report/voice/tts 都没指定，默认生成 report 和 voice
-    any_flag = args.report or args.voice or args.tts
-    gen_report = args.report if any_flag else True
-    gen_voice = args.voice if any_flag else True
-    gen_tts = args.tts
+    gen_report, gen_voice, gen_tts = _resolve_gen_flags(args)
 
     print("=== 拉取并存储 RSS 原始内容 ===")
     fetch_and_store_raw_feeds(conn)
@@ -188,6 +202,7 @@ def cmd_run(args):
         gen_voice=gen_voice,
         gen_tts=gen_tts,
         dry_run=args.dry_run,
+        batch_id=getattr(args, "batch", None),
     )
     print()
     conn.close()

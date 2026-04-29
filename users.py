@@ -12,6 +12,11 @@ from db import (
     ensure_subscription,
     create_push_batch,
     mark_article_pushed,
+    get_batch,
+    get_batch_articles,
+    update_batch_report,
+    update_batch_voice,
+    update_batch_tts,
 )
 from generate_report import (
     build_user_prompt,
@@ -50,6 +55,70 @@ def init_connection():
     return get_connection()
 
 
+def _ensure_report(conn, batch_id, user_name, date_str, user_prompt, report):
+    """确保早报可用：已有则直接返回，否则生成并存入 DB + 写文件。"""
+    if report is not None:
+        return report
+    print(f"  [{user_name}] 正在生成 Markdown 早报...")
+    report = generate_report(user_prompt)
+    if batch_id:
+        update_batch_report(conn, batch_id, report)
+    report_path = REPORTS_DIR / f"{date_str}-{user_name}.md"
+    report_path.write_text(report, encoding="utf-8")
+    print(f"  [{user_name}] 早报已生成: {report_path}")
+    return report
+
+
+def _ensure_voice(conn, batch_id, user_name, date_str, user_prompt, report, voice_script):
+    """确保语音稿可用：已有则直接返回，否则生成并存入 DB + 写文件。"""
+    if voice_script is not None:
+        return voice_script
+    print(f"  [{user_name}] 正在生成语音稿...")
+    voice_script = generate_voice_script(report, user_prompt)
+    if batch_id:
+        update_batch_voice(conn, batch_id, voice_script)
+    voice_path = REPORTS_DIR / f"{date_str}-{user_name}-voice.txt"
+    voice_path.write_text(voice_script, encoding="utf-8")
+    print(f"  [{user_name}] 语音稿已生成: {voice_path}")
+    return voice_script
+
+
+def _do_tts(conn, batch_id, user_name, date_str, voice_script):
+    """生成 TTS 音频并存入 DB。"""
+    audio_path = REPORTS_DIR / f"{date_str}-{user_name}-voice.wav"
+    print(f"  [{user_name}] 正在生成语音音频...")
+    if text_to_speech(voice_script, audio_path):
+        if batch_id:
+            update_batch_tts(conn, batch_id, audio_path)
+        print(f"  [{user_name}] 语音音频已生成: {audio_path}")
+    else:
+        print(f"  [{user_name}] 语音音频生成失败")
+
+
+def _generate_outputs(
+    conn, batch_id, user_name, date_str, user_prompt,
+    report, voice_script, gen_report, gen_voice, gen_tts,
+):
+    """根据标志生成产物，自动处理依赖链。"""
+    if gen_report:
+        report = _ensure_report(conn, batch_id, user_name, date_str, user_prompt, None)
+        voice_script = None
+
+    if gen_voice or gen_tts:
+        report = _ensure_report(conn, batch_id, user_name, date_str, user_prompt, report)
+
+    if gen_voice:
+        voice_script = _ensure_voice(
+            conn, batch_id, user_name, date_str, user_prompt, report, None
+        )
+
+    if gen_tts:
+        voice_script = _ensure_voice(
+            conn, batch_id, user_name, date_str, user_prompt, report, voice_script
+        )
+        _do_tts(conn, batch_id, user_name, date_str, voice_script)
+
+
 def generate_for_users(
     conn,
     user_filter=None,
@@ -57,10 +126,18 @@ def generate_for_users(
     gen_voice=True,
     gen_tts=False,
     dry_run=False,
+    batch_id=None,
 ):
-    """为用户生成早报内容的核心逻辑。"""
+    """为用户生成早报内容的核心逻辑。
+
+    batch_id 不为 None 时进入批次模式，跳过选文流程，直接基于已有批次生成。
+    """
     load_dotenv()
     REPORTS_DIR.mkdir(exist_ok=True)
+
+    if batch_id is not None:
+        _generate_from_batch(conn, batch_id, gen_report, gen_voice, gen_tts)
+        return
 
     today = date.today().isoformat()
 
@@ -77,7 +154,6 @@ def generate_for_users(
     for user in users:
         user_id, user_name = user["id"], user["name"]
 
-        # 智能筛选候选文章
         print(f"  [{user_name}] 正在筛选候选文章...")
         candidates, today_articles = fetch_candidate_articles(conn, user_id, today)
 
@@ -90,64 +166,47 @@ def generate_for_users(
             f"共 {len(candidates)} 篇候选论文"
         )
 
-        # AI 选择 2-3 篇
         print(f"  [{user_name}] 正在选择推荐文章...")
         selected = select_articles(candidates)
         print(f"  [{user_name}] 已选择 {len(selected)} 篇推荐文章")
 
-        # 标记已推送
         if not dry_run:
-            batch_id = create_push_batch(conn, user_id)
+            current_batch_id = create_push_batch(conn, user_id)
             for article in selected:
-                mark_article_pushed(conn, user_id, article["id"], batch_id)
+                mark_article_pushed(conn, user_id, article["id"], current_batch_id)
             print(
-                f"  [{user_name}] 已标记 {len(selected)} 篇文章为已推送（批次 #{batch_id}）"
+                f"  [{user_name}] 已标记 {len(selected)} 篇文章为已推送（批次 #{current_batch_id}）"
             )
         else:
+            current_batch_id = None
             print(f"  [{user_name}] [DRY RUN] 跳过标记已推送文章")
 
-        # 生成报告
         user_prompt = build_user_prompt(today, selected)
-        report_path = REPORTS_DIR / f"{today}-{user_name}.md"
-        report = None
+        _generate_outputs(
+            conn, current_batch_id, user_name, today, user_prompt,
+            None, None, gen_report, gen_voice, gen_tts,
+        )
 
-        if gen_report:
-            print(f"  [{user_name}] 正在生成 Markdown 早报...")
-            report = generate_report(user_prompt)
-            report_path.write_text(report, encoding="utf-8")
-            print(f"  [{user_name}] 早报已生成: {report_path}")
 
-        if gen_voice or gen_tts:
-            # 语音稿依赖早报文本，确保早报可用
-            if report is None:
-                if report_path.exists():
-                    report = report_path.read_text(encoding="utf-8")
-                    print(f"  [{user_name}] 读取已有早报: {report_path}")
-                else:
-                    print(f"  [{user_name}] 未找到早报，正在生成 Markdown 早报...")
-                    report = generate_report(user_prompt)
-                    report_path.write_text(report, encoding="utf-8")
-                    print(f"  [{user_name}] 早报已生成: {report_path}")
+def _generate_from_batch(conn, batch_id, gen_report, gen_voice, gen_tts):
+    """基于已有批次生成产物。"""
+    batch = get_batch(conn, batch_id)
+    if not batch:
+        print(f"未找到批次 #{batch_id}")
+        return
 
-        if gen_voice:
-            print(f"  [{user_name}] 正在生成语音稿...")
-            voice_script = generate_voice_script(report, user_prompt)
-            voice_path = REPORTS_DIR / f"{today}-{user_name}-voice.txt"
-            voice_path.write_text(voice_script, encoding="utf-8")
-            print(f"  [{user_name}] 语音稿已生成: {voice_path}")
+    user_name = batch["user_name"]
+    batch_date = batch["created_at"][:10]
+    print(f"  [批次 #{batch_id}] 用户: {user_name}, 创建于: {batch_date}")
 
-        if gen_tts:
-            if not gen_voice:
-                voice_path = REPORTS_DIR / f"{today}-{user_name}-voice.txt"
-                if voice_path.exists():
-                    voice_script = voice_path.read_text(encoding="utf-8")
-                else:
-                    print(f"  [{user_name}] 正在生成语音稿...")
-                    voice_script = generate_voice_script(report, user_prompt)
-                    voice_path.write_text(voice_script, encoding="utf-8")
-            audio_path = REPORTS_DIR / f"{today}-{user_name}-voice.wav"
-            print(f"  [{user_name}] 正在生成语音音频...")
-            if text_to_speech(voice_script, audio_path):
-                print(f"  [{user_name}] 语音音频已生成: {audio_path}")
-            else:
-                print(f"  [{user_name}] 语音音频生成失败")
+    articles = get_batch_articles(conn, batch_id)
+    if not articles:
+        print(f"  [批次 #{batch_id}] 没有关联文章，跳过")
+        return
+
+    user_prompt = build_user_prompt(batch_date, articles)
+    _generate_outputs(
+        conn, batch_id, user_name, batch_date, user_prompt,
+        batch["report"], batch["voice_script"],
+        gen_report, gen_voice, gen_tts,
+    )

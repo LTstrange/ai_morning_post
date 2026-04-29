@@ -62,9 +62,12 @@ def init_db(db_path=DB_PATH):
         );
 
         CREATE TABLE IF NOT EXISTS push_batches (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id    INTEGER NOT NULL REFERENCES users(id),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id        INTEGER NOT NULL REFERENCES users(id),
+            report         TEXT,
+            voice_script   TEXT,
+            tts_audio_path TEXT,
+            created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS user_article_history (
@@ -362,7 +365,10 @@ def get_user_history(
 def get_push_batches(conn, user_id=None):
     """获取推送批次列表及每批次文章数。"""
     base = (
-        "SELECT b.id, u.name AS user_name, b.created_at, COUNT(h.id) AS article_count "
+        "SELECT b.id, u.name AS user_name, b.created_at, COUNT(h.id) AS article_count, "
+        "b.report IS NOT NULL AS has_report, "
+        "b.voice_script IS NOT NULL AS has_voice, "
+        "b.tts_audio_path IS NOT NULL AS has_tts "
         "FROM push_batches b "
         "JOIN users u ON b.user_id = u.id "
         "LEFT JOIN user_article_history h ON h.batch_id = b.id "
@@ -373,3 +379,68 @@ def get_push_batches(conn, user_id=None):
         params.append(user_id)
     base += "GROUP BY b.id ORDER BY b.created_at DESC"
     return conn.execute(base, params).fetchall()
+
+
+def get_batch(conn, batch_id):
+    """获取批次信息，包括生成产物。不存在返回 None。"""
+    return conn.execute(
+        "SELECT b.*, u.name AS user_name "
+        "FROM push_batches b "
+        "JOIN users u ON b.user_id = u.id "
+        "WHERE b.id = ?",
+        (batch_id,),
+    ).fetchone()
+
+
+def get_batch_articles(conn, batch_id):
+    """根据 batch_id 查出关联的文章列表。"""
+    return conn.execute(
+        "SELECT a.id, a.title, a.authors, a.link, a.summary, a.published, f.name AS feed_name "
+        "FROM user_article_history h "
+        "JOIN articles a ON h.article_id = a.id "
+        "JOIN feeds f ON a.feed_id = f.id "
+        "WHERE h.batch_id = ? "
+        "ORDER BY a.published DESC",
+        (batch_id,),
+    ).fetchall()
+
+
+def update_batch_report(conn, batch_id, report):
+    """更新早报，级联清空下游（voice_script + tts_audio_path）。"""
+    row = conn.execute(
+        "SELECT tts_audio_path FROM push_batches WHERE id = ?", (batch_id,)
+    ).fetchone()
+    if row and row["tts_audio_path"]:
+        audio = Path(row["tts_audio_path"])
+        if audio.exists():
+            audio.unlink()
+    conn.execute(
+        "UPDATE push_batches SET report = ?, voice_script = NULL, tts_audio_path = NULL WHERE id = ?",
+        (report, batch_id),
+    )
+    conn.commit()
+
+
+def update_batch_voice(conn, batch_id, voice_script):
+    """更新语音稿，级联清空下游（tts_audio_path）。"""
+    row = conn.execute(
+        "SELECT tts_audio_path FROM push_batches WHERE id = ?", (batch_id,)
+    ).fetchone()
+    if row and row["tts_audio_path"]:
+        audio = Path(row["tts_audio_path"])
+        if audio.exists():
+            audio.unlink()
+    conn.execute(
+        "UPDATE push_batches SET voice_script = ?, tts_audio_path = NULL WHERE id = ?",
+        (voice_script, batch_id),
+    )
+    conn.commit()
+
+
+def update_batch_tts(conn, batch_id, tts_audio_path):
+    """更新 TTS 音频路径。"""
+    conn.execute(
+        "UPDATE push_batches SET tts_audio_path = ? WHERE id = ?",
+        (str(tts_audio_path), batch_id),
+    )
+    conn.commit()

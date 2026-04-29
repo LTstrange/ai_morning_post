@@ -25,6 +25,9 @@ def main():
     generate_parser = subparsers.add_parser("generate", help="生成早报内容")
     generate_parser.add_argument("-u", "--user", help="只为指定用户名生成早报")
     generate_parser.add_argument(
+        "--batch", type=int, help="基于指定批次生成，跳过选文流程"
+    )
+    generate_parser.add_argument(
         "--report", action="store_true", help="生成 Markdown 早报"
     )
     generate_parser.add_argument("--voice", action="store_true", help="生成语音播报稿")
@@ -79,6 +82,9 @@ def main():
         "run", help="执行完整流程（fetch + sync + parse + generate）"
     )
     run_parser.add_argument("-u", "--user", help="只为指定用户名生成早报")
+    run_parser.add_argument(
+        "--batch", type=int, help="基于指定批次生成，跳过选文流程"
+    )
     run_parser.add_argument("--report", action="store_true", help="生成 Markdown 早报")
     run_parser.add_argument("--voice", action="store_true", help="生成语音播报稿")
     run_parser.add_argument(
