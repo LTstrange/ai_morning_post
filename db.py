@@ -4,6 +4,7 @@ import sqlite3
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "data.db"
+MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
 def get_connection(db_path=DB_PATH):
@@ -15,74 +16,55 @@ def get_connection(db_path=DB_PATH):
 
 
 def init_db(db_path=DB_PATH):
-    """初始化数据库，创建所有表。"""
+    """初始化数据库，运行所有未应用的迁移。"""
     conn = get_connection(db_path)
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS feeds (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            name       TEXT NOT NULL,
-            url        TEXT NOT NULL UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS raw_feeds (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            feed_id      INTEGER NOT NULL REFERENCES feeds(id),
-            raw_content  TEXT NOT NULL,
-            content_hash TEXT NOT NULL,
-            fetched_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_raw_feeds_dedup
-            ON raw_feeds(feed_id, content_hash);
-
-        CREATE TABLE IF NOT EXISTS users (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            name       TEXT NOT NULL UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS subscriptions (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id    INTEGER NOT NULL REFERENCES users(id),
-            feed_id    INTEGER NOT NULL REFERENCES feeds(id),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(user_id, feed_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS articles (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            feed_id    INTEGER NOT NULL REFERENCES feeds(id),
-            link       TEXT NOT NULL UNIQUE,
-            title      TEXT NOT NULL,
-            summary    TEXT,
-            published  TEXT,
-            authors    TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS push_batches (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id        INTEGER NOT NULL REFERENCES users(id),
-            report         TEXT,
-            voice_script   TEXT,
-            tts_audio_path TEXT,
-            created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS user_article_history (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id    INTEGER NOT NULL REFERENCES users(id),
-            article_id INTEGER NOT NULL REFERENCES articles(id),
-            batch_id   INTEGER NOT NULL REFERENCES push_batches(id) ON DELETE CASCADE,
-            UNIQUE(user_id, article_id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_history_batch
-            ON user_article_history(batch_id);
-    """)
-    conn.commit()
+    migrate(conn)
     conn.close()
+
+
+def migrate(conn):
+    """执行所有未应用的数据库迁移。"""
+    # 确保迁移版本表存在
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS schema_version ("
+        "  version     INTEGER PRIMARY KEY,"
+        "  applied_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        ")"
+    )
+    conn.commit()
+
+    # 检测当前版本
+    current = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
+    current_version = current[0] if current[0] is not None else 0
+
+    # 存量数据库兼容：feeds 表已存在但 schema_version 为空 → 标记版本 1
+    feeds_exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='feeds'"
+    ).fetchone()
+    if feeds_exists and current_version == 0:
+        conn.execute("INSERT INTO schema_version (version) VALUES (1)")
+        conn.commit()
+        current_version = 1
+
+    # 扫描迁移文件并按版本号排序执行
+    if not MIGRATIONS_DIR.exists():
+        return
+
+    migration_files = sorted(
+        f for f in MIGRATIONS_DIR.iterdir()
+        if f.suffix == ".sql" and f.name[0].isdigit()
+    )
+
+    for mf in migration_files:
+        version = int(mf.name.split("_")[0])
+        if version > current_version:
+            sql = mf.read_text(encoding="utf-8")
+            conn.executescript(sql)
+            conn.execute(
+                "INSERT INTO schema_version (version) VALUES (?)", (version,)
+            )
+            conn.commit()
+            print(f"  [迁移] 已应用版本 {version}: {mf.name}")
 
 
 def ensure_feed(conn, name, url):

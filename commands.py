@@ -1,6 +1,6 @@
 """子命令处理模块。"""
 
-from db import reset_user_history, get_user_history, get_push_batches
+from db import reset_user_history, get_user_history, get_push_batches, migrate, get_connection
 from rss import fetch_and_store_raw_feeds, parse_and_store_articles
 from users import init_connection, sync_users, generate_for_users, generate_from_batch
 
@@ -199,3 +199,12 @@ def cmd_run(args):
     )
     print()
     conn.close()
+
+
+def cmd_migrate(args):
+    """处理 migrate 子命令。"""
+    conn = get_connection()
+    print("=== 检查并执行数据库迁移 ===")
+    migrate(conn)
+    conn.close()
+    print("迁移完成。")

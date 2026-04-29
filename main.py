@@ -2,7 +2,7 @@
 
 import argparse
 
-from commands import cmd_fetch, cmd_sync, cmd_parse, cmd_regen, cmd_history, cmd_run
+from commands import cmd_fetch, cmd_sync, cmd_parse, cmd_regen, cmd_history, cmd_run, cmd_migrate
 
 
 def main():
@@ -71,6 +71,9 @@ def main():
         "username", nargs="?", help="指定用户名（留空查看所有）"
     )
 
+    # migrate 子命令
+    subparsers.add_parser("migrate", help="执行所有未应用的数据库迁移")
+
     # run 子命令
     run_parser = subparsers.add_parser(
         "run", help="执行完整流程（fetch + sync + parse + generate）"
@@ -105,6 +108,8 @@ def main():
             history_parser.print_help()
             return
         cmd_history(args)
+    elif args.command == "migrate":
+        cmd_migrate(args)
     elif args.command == "run":
         cmd_run(args)
 
