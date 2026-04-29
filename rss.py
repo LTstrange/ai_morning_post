@@ -9,7 +9,7 @@ import requests
 
 from db import ensure_feed, get_latest_raw_feed, save_raw_feed, save_article
 
-CACHE_TTL = timedelta(hours=24)
+CACHE_TTL = timedelta(hours=23)
 
 
 def load_feeds(path="feeds.json"):
@@ -48,7 +48,7 @@ def parse_entry(entry):
     }
 
 
-def fetch_and_store_raw_feeds(conn):
+def fetch_and_store_raw_feeds(conn, force=False):
     """遍历所有 feed 源，从 URL 拉取 RSS 存入 raw_feeds 表（24 小时内缓存有效则跳过）。"""
     feeds = load_feeds()
     now = datetime.now(timezone.utc)
@@ -59,12 +59,16 @@ def fetch_and_store_raw_feeds(conn):
 
         feed_id = ensure_feed(conn, name, url)
 
-        latest_fetched_at = get_latest_raw_feed(conn, feed_id)
-        if latest_fetched_at:
-            fetched_time = datetime.fromisoformat(latest_fetched_at).replace(tzinfo=timezone.utc)
-            if now - fetched_time < CACHE_TTL:
-                print(f"  [跳过] {name} -> 缓存未过期（{latest_fetched_at}）")
-                continue
+        if not force:
+            latest_fetched_at = get_latest_raw_feed(conn, feed_id)
+            if latest_fetched_at:
+                fetched_time = datetime.fromisoformat(latest_fetched_at).replace(
+                    tzinfo=timezone.utc
+                )
+                if now - fetched_time < CACHE_TTL:
+                    local_time = fetched_time.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"  [跳过] {name} -> 缓存未过期（{local_time}）")
+                    continue
 
         print(f"  [下载] {name} -> {url}")
         try:

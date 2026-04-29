@@ -9,7 +9,7 @@ def cmd_fetch(args):
     """处理 fetch 子命令。"""
     conn = init_connection()
     print("=== 拉取并存储 RSS 原始内容 ===")
-    fetch_and_store_raw_feeds(conn)
+    fetch_and_store_raw_feeds(conn, force=args.force)
     conn.close()
 
 

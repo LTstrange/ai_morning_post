@@ -100,6 +100,12 @@ def save_raw_feed(conn, feed_id, raw_content):
         (feed_id, content_hash),
     ).fetchone()
     if exists:
+        conn.execute(
+            "UPDATE raw_feeds SET fetched_at = CURRENT_TIMESTAMP "
+            "WHERE feed_id = ? AND content_hash = ?",
+            (feed_id, content_hash),
+        )
+        conn.commit()
         return False
     conn.execute(
         "INSERT INTO raw_feeds (feed_id, raw_content, content_hash) VALUES (?, ?, ?)",

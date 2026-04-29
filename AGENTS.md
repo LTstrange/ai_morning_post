@@ -8,7 +8,7 @@
 ## Run
 ```
 # 子命令用法
-uv run python main.py fetch      # 从 URL 拉取 RSS 存入数据库（24 小时内缓存有效则跳过）
+uv run python main.py fetch      # 从 URL 拉取 RSS 存入数据库（23 小时内缓存有效则跳过）
 uv run python main.py sync       # 同步用户与订阅
 uv run python main.py parse      # 解析并存储文章
 uv run python main.py generate   # 生成早报内容（默认生成报告和语音稿）

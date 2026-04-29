@@ -10,7 +10,8 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="可用子命令")
 
     # fetch 子命令
-    subparsers.add_parser("fetch", help="拉取 RSS 原始内容")
+    fetch_parser = subparsers.add_parser("fetch", help="拉取 RSS 原始内容")
+    fetch_parser.add_argument("-f", "--force", action="store_true", help="忽略缓存，强制重新拉取")
 
     # sync 子命令
     subparsers.add_parser("sync", help="同步用户与订阅")
