@@ -7,20 +7,35 @@
 
 ## Run
 ```
-uv run python main.py            # 拉取 RSS、同步用户、解析文章入库
-uv run python main.py --tts      # 生成语音音频（需要 MIMO_API_KEY）
-uv run python main.py --dry-run  # 模拟运行，不标记文章为已推送
-uv run python tts.py             # 批量生成 reports/ 目录下所有语音播报稿的音频
+# 子命令用法
+uv run python main.py fetch      # 拉取 RSS 原始内容
+uv run python main.py sync       # 同步用户与订阅
+uv run python main.py parse      # 解析并存储文章
+uv run python main.py generate   # 生成早报内容（默认生成报告和语音稿）
+uv run python main.py run        # 执行完整流程（fetch + sync + parse + generate）
 
-# 调试命令
-uv run python main.py --show-history           # 查看所有用户的推送历史
-uv run python main.py --show-history Alice     # 查看 Alice 的推送历史
-uv run python main.py --reset-history          # 重置所有用户的推送历史
-uv run python main.py --reset-history Alice    # 重置 Alice 的推送历史
+# 生成选项
+uv run python main.py generate --report        # 只生成 Markdown 早报
+uv run python main.py generate --voice         # 只生成语音播报稿
+uv run python main.py generate --tts           # 生成语音音频（需要 MIMO_API_KEY）
+uv run python main.py generate --dry-run       # 模拟运行，不标记文章为已推送
+uv run python main.py generate -u Alice        # 只为 Alice 生成早报
+
+# 历史管理
+uv run python main.py history show             # 查看所有用户的推送历史
+uv run python main.py history show Alice       # 查看 Alice 的推送历史
+uv run python main.py history reset            # 重置所有用户的推送历史
+uv run python main.py history reset Alice      # 重置 Alice 的推送历史
+
+# 批量生成语音音频
+uv run python tts.py             # 批量生成 reports/ 目录下所有语音播报稿的音频
 ```
 
 ## Project structure
-- `main.py` — entrypoint；流程：1) 读取本地 XML 存入 raw_feeds 表 2) 同步用户与订阅 3) 从 raw_feeds 解析文章存入 articles 表 4) 为每位用户智能筛选候选文章 5) AI 选择 2-3 篇推荐文章 6) 生成早报和语音
+- `main.py` — 入口；参数解析和子命令分发
+- `commands.py` — 子命令处理模块；每个子命令的处理函数
+- `rss.py` — RSS 数据层；拉取、解析、存储 RSS 数据
+- `users.py` — 用户业务层；用户订阅管理和早报生成
 - `generate_report.py` — AI 早报生成模块；智能筛选候选文章，调用 DeepSeek API 生成 Markdown 早报和语音播报稿
   - 可被其他脚本导入（导入不触发副作用）
   - 公开函数：`fetch_candidate_articles()`, `select_articles()`, `build_user_prompt()`, `generate_report()`, `generate_voice_script()`, `call_llm()`
@@ -37,6 +52,17 @@ uv run python main.py --reset-history Alice    # 重置 Alice 的推送历史
 - `reports/` — 生成的早报输出目录（`YYYY-MM-DD.md` + `YYYY-MM-DD-voice.txt` + `YYYY-MM-DD-voice.wav`，已加入 .gitignore）
 - `data.db` — SQLite 数据库文件（已加入 .gitignore）
 
+### 依赖关系
+```
+main.py
+  └── commands.py
+        ├── rss.py
+        └── users.py
+              ├── generate_report.py
+              ├── tts.py
+              └── db.py
+```
+
 ## Database
 - 六张表：
   - `feeds` — RSS 源信息（name, url）
@@ -51,7 +77,7 @@ uv run python main.py --reset-history Alice    # 重置 Alice 的推送历史
 ## Adding a new feed
 1. 在 `feeds.json` 的 `feeds` 数组中添加 `{"name": "...", "url": "..."}`
 2. 手动下载对应 XML 到 `output/`（文件名需与 URL 中的 TOC 编号匹配，如 `TOC1234.xml`）
-3. 运行 `uv run python main.py`
+3. 运行 `uv run python main.py fetch`
 
 如果不手动下载，程序会自动从 URL 拉取并保存到 `output/`。
 
