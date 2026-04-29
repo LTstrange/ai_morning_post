@@ -15,7 +15,6 @@ from db import (
     remove_user,
     list_users,
     ensure_user,
-    ensure_subscription,
     set_user_subscriptions,
     add_subscription,
     remove_subscription,
@@ -232,9 +231,7 @@ def _resolve_target_user(conn, username):
 
 def _find_feed(conn, feed_name):
     """查找 feed，未找到时打印提示并返回 None。"""
-    feed = conn.execute(
-        "SELECT id FROM feeds WHERE name = ?", (feed_name,)
-    ).fetchone()
+    feed = conn.execute("SELECT id FROM feeds WHERE name = ?", (feed_name,)).fetchone()
     if not feed:
         print(f'未找到期刊 "{feed_name}"，请先运行 fetch')
     return feed
@@ -320,7 +317,7 @@ def cmd_user(args):
                 if result:
                     print(f'已为用户 "{args.username}" 添加订阅: {feed_name}')
                 else:
-                    print(f'订阅已存在: {feed_name}')
+                    print(f"订阅已存在: {feed_name}")
 
     elif args.user_action == "unsubscribe":
         user = _resolve_target_user(conn, args.username)
@@ -330,7 +327,7 @@ def cmd_user(args):
             if result:
                 print(f'已为用户 "{args.username}" 取消订阅: {feed_name}')
             else:
-                print(f'未找到该订阅: {feed_name}')
+                print(f"未找到该订阅: {feed_name}")
 
     elif args.user_action == "sync":
         filepath = getattr(args, "file", "users.json")
@@ -352,10 +349,10 @@ def cmd_user(args):
             name = uc["name"]
             user_id = ensure_user(conn, name)
             activate_user(conn, user_id)
-            set_user_subscriptions(
-                conn, user_id, uc.get("subscriptions", [])
+            set_user_subscriptions(conn, user_id, uc.get("subscriptions", []))
+            print(
+                f'已恢复用户 "{name}" 的配置 ({len(uc.get("subscriptions", []))} 个订阅)'
             )
-            print(f'已恢复用户 "{name}" 的配置 ({len(uc.get("subscriptions", []))} 个订阅)')
 
     elif args.user_action == "export":
         users = conn.execute(
@@ -367,10 +364,12 @@ def cmd_user(args):
             export_data = {"users": []}
             for u in users:
                 subs = get_user_subscriptions(conn, u["id"])
-                export_data["users"].append({
-                    "name": u["name"],
-                    "subscriptions": [s["name"] for s in subs],
-                })
+                export_data["users"].append(
+                    {
+                        "name": u["name"],
+                        "subscriptions": [s["name"] for s in subs],
+                    }
+                )
             with open(args.file, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, ensure_ascii=False, indent=2)
             print(f"已导出 {len(users)} 个用户到 {args.file}")
