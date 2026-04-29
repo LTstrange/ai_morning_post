@@ -2,7 +2,7 @@
 
 from db import reset_user_history, get_user_history, get_push_batches
 from rss import fetch_and_store_raw_feeds, parse_and_store_articles
-from users import init_connection, sync_users, generate_for_users
+from users import init_connection, sync_users, generate_for_users, generate_from_batch
 
 
 def cmd_fetch(args):
@@ -39,24 +39,18 @@ def _resolve_gen_flags(args):
     )
 
 
-def cmd_generate(args):
-    """处理 generate 子命令。"""
+def cmd_regen(args):
+    """处理 regen 子命令。"""
     conn = init_connection()
     gen_report, gen_voice, gen_tts = _resolve_gen_flags(args)
-    batch_id = getattr(args, "batch", None)
 
-    if batch_id:
-        print(f"=== 基于批次 #{batch_id} 生成内容 ===")
-    else:
-        print("=== 为每位用户生成个人早报 ===")
-    generate_for_users(
+    print(f"=== 基于批次 #{args.batch} 重新生成内容 ===")
+    generate_from_batch(
         conn,
-        user_filter=args.user,
+        batch_id=args.batch,
         gen_report=gen_report,
         gen_voice=gen_voice,
         gen_tts=gen_tts,
-        dry_run=args.dry_run,
-        batch_id=batch_id,
     )
     conn.close()
 
@@ -202,7 +196,6 @@ def cmd_run(args):
         gen_voice=gen_voice,
         gen_tts=gen_tts,
         dry_run=args.dry_run,
-        batch_id=getattr(args, "batch", None),
     )
     print()
     conn.close()

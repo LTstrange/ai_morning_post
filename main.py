@@ -2,7 +2,7 @@
 
 import argparse
 
-from commands import cmd_fetch, cmd_sync, cmd_parse, cmd_generate, cmd_history, cmd_run
+from commands import cmd_fetch, cmd_sync, cmd_parse, cmd_regen, cmd_history, cmd_run
 
 
 def main():
@@ -21,21 +21,15 @@ def main():
     # parse 子命令
     subparsers.add_parser("parse", help="解析并存储文章")
 
-    # generate 子命令
-    generate_parser = subparsers.add_parser("generate", help="生成早报内容")
-    generate_parser.add_argument("-u", "--user", help="只为指定用户名生成早报")
-    generate_parser.add_argument(
-        "--batch", type=int, help="基于指定批次生成，跳过选文流程"
-    )
-    generate_parser.add_argument(
+    # regen 子命令
+    regen_parser = subparsers.add_parser("regen", help="基于已有批次重新生成产物")
+    regen_parser.add_argument("batch", type=int, help="批次 ID")
+    regen_parser.add_argument(
         "--report", action="store_true", help="生成 Markdown 早报"
     )
-    generate_parser.add_argument("--voice", action="store_true", help="生成语音播报稿")
-    generate_parser.add_argument(
+    regen_parser.add_argument("--voice", action="store_true", help="生成语音播报稿")
+    regen_parser.add_argument(
         "--tts", action="store_true", help="生成语音音频（需要 MIMO_API_KEY）"
-    )
-    generate_parser.add_argument(
-        "--dry-run", action="store_true", help="模拟运行，不标记文章为已推送"
     )
 
     # history 子命令
@@ -82,9 +76,6 @@ def main():
         "run", help="执行完整流程（fetch + sync + parse + generate）"
     )
     run_parser.add_argument("-u", "--user", help="只为指定用户名生成早报")
-    run_parser.add_argument(
-        "--batch", type=int, help="基于指定批次生成，跳过选文流程"
-    )
     run_parser.add_argument("--report", action="store_true", help="生成 Markdown 早报")
     run_parser.add_argument("--voice", action="store_true", help="生成语音播报稿")
     run_parser.add_argument(
@@ -107,8 +98,8 @@ def main():
         cmd_sync(args)
     elif args.command == "parse":
         cmd_parse(args)
-    elif args.command == "generate":
-        cmd_generate(args)
+    elif args.command == "regen":
+        cmd_regen(args)
     elif args.command == "history":
         if not args.history_action:
             history_parser.print_help()

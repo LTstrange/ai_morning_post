@@ -69,7 +69,9 @@ def _ensure_report(conn, batch_id, user_name, date_str, user_prompt, report):
     return report
 
 
-def _ensure_voice(conn, batch_id, user_name, date_str, user_prompt, report, voice_script):
+def _ensure_voice(
+    conn, batch_id, user_name, date_str, user_prompt, report, voice_script
+):
     """确保语音稿可用：已有则直接返回，否则生成并存入 DB + 写文件。"""
     if voice_script is not None:
         return voice_script
@@ -96,8 +98,16 @@ def _do_tts(conn, batch_id, user_name, date_str, voice_script):
 
 
 def _generate_outputs(
-    conn, batch_id, user_name, date_str, user_prompt,
-    report, voice_script, gen_report, gen_voice, gen_tts,
+    conn,
+    batch_id,
+    user_name,
+    date_str,
+    user_prompt,
+    report,
+    voice_script,
+    gen_report,
+    gen_voice,
+    gen_tts,
 ):
     """根据标志生成产物，自动处理依赖链。"""
     if gen_report:
@@ -105,7 +115,9 @@ def _generate_outputs(
         voice_script = None
 
     if gen_voice or gen_tts:
-        report = _ensure_report(conn, batch_id, user_name, date_str, user_prompt, report)
+        report = _ensure_report(
+            conn, batch_id, user_name, date_str, user_prompt, report
+        )
 
     if gen_voice:
         voice_script = _ensure_voice(
@@ -126,18 +138,10 @@ def generate_for_users(
     gen_voice=True,
     gen_tts=False,
     dry_run=False,
-    batch_id=None,
 ):
-    """为用户生成早报内容的核心逻辑。
-
-    batch_id 不为 None 时进入批次模式，跳过选文流程，直接基于已有批次生成。
-    """
+    """为用户生成早报内容的核心逻辑：选文 + 创建批次 + 生成产物。"""
     load_dotenv()
     REPORTS_DIR.mkdir(exist_ok=True)
-
-    if batch_id is not None:
-        _generate_from_batch(conn, batch_id, gen_report, gen_voice, gen_tts)
-        return
 
     today = date.today().isoformat()
 
@@ -183,13 +187,24 @@ def generate_for_users(
 
         user_prompt = build_user_prompt(today, selected)
         _generate_outputs(
-            conn, current_batch_id, user_name, today, user_prompt,
-            None, None, gen_report, gen_voice, gen_tts,
+            conn,
+            current_batch_id,
+            user_name,
+            today,
+            user_prompt,
+            None,
+            None,
+            gen_report,
+            gen_voice,
+            gen_tts,
         )
 
 
-def _generate_from_batch(conn, batch_id, gen_report, gen_voice, gen_tts):
-    """基于已有批次生成产物。"""
+def generate_from_batch(conn, batch_id, gen_report=True, gen_voice=True, gen_tts=False):
+    """基于已有批次重新生成产物。"""
+    load_dotenv()
+    REPORTS_DIR.mkdir(exist_ok=True)
+
     batch = get_batch(conn, batch_id)
     if not batch:
         print(f"未找到批次 #{batch_id}")
@@ -206,7 +221,14 @@ def _generate_from_batch(conn, batch_id, gen_report, gen_voice, gen_tts):
 
     user_prompt = build_user_prompt(batch_date, articles)
     _generate_outputs(
-        conn, batch_id, user_name, batch_date, user_prompt,
-        batch["report"], batch["voice_script"],
-        gen_report, gen_voice, gen_tts,
+        conn,
+        batch_id,
+        user_name,
+        batch_date,
+        user_prompt,
+        batch["report"],
+        batch["voice_script"],
+        gen_report,
+        gen_voice,
+        gen_tts,
     )

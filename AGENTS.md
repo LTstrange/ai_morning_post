@@ -11,21 +11,20 @@
 uv run python main.py fetch      # 从 URL 拉取 RSS 存入数据库（23 小时内缓存有效则跳过）
 uv run python main.py sync       # 同步用户与订阅
 uv run python main.py parse      # 解析并存储文章
-uv run python main.py generate   # 生成早报内容（默认生成报告和语音稿）
-uv run python main.py run        # 执行完整流程（fetch + sync + parse + generate）
+uv run python main.py run        # 执行完整流程（fetch + sync + parse + 选文 + 生成）
 
-# 生成选项
-uv run python main.py generate --report        # 只生成 Markdown 早报
-uv run python main.py generate --voice         # 只生成语音播报稿
-uv run python main.py generate --tts           # 生成语音音频（需要 MIMO_API_KEY）
-uv run python main.py generate --dry-run       # 模拟运行，不标记文章为已推送
-uv run python main.py generate -u Alice        # 只为 Alice 生成早报
+# run 选项
+uv run python main.py run -u Alice             # 只为 Alice 执行
+uv run python main.py run --report             # 只生成 Markdown 早报
+uv run python main.py run --voice              # 只生成语音播报稿
+uv run python main.py run --tts                # 生成语音音频（需要 MIMO_API_KEY）
+uv run python main.py run --dry-run            # 模拟运行，不标记文章为已推送
 
-# 基于已有批次生成（跳过选文流程）
-uv run python main.py generate --batch 5                  # 用批次 #5 的数据生成早报+语音稿
-uv run python main.py generate --voice --batch 5           # 用批次 #5 的早报生成语音稿
-uv run python main.py generate --report --batch 5          # 重新生成早报（语音稿自动失效）
-uv run python main.py generate --tts --batch 5             # 用批次 #5 的语音稿生成音频
+# 基于已有批次重新生成（跳过选文流程）
+uv run python main.py regen 5                  # 用批次 #5 的数据生成早报+语音稿
+uv run python main.py regen 5 --voice          # 用批次 #5 的早报生成语音稿
+uv run python main.py regen 5 --report         # 重新生成早报（语音稿自动失效）
+uv run python main.py regen 5 --tts            # 用批次 #5 的语音稿生成音频
 
 # 历史管理
 uv run python main.py history show             # 查看所有用户的推送历史
@@ -85,7 +84,7 @@ main.py
   - `articles` — 解析后的文章（link UNIQUE 去重，published 为 ISO 8601 格式，authors 为 JSON 数组）
   - `users` — 用户（name UNIQUE）
   - `subscriptions` — 用户与 feed 的多对多订阅关系（UNIQUE(user_id, feed_id)）
-  - `push_batches` — 推送批次（user_id, created_at, report, voice_script, tts_audio_path），每次 generate 为每个用户创建一个批次
+  - `push_batches` — 推送批次（user_id, created_at, report, voice_script, tts_audio_path），每次 run 为每个用户创建一个批次
   - `user_article_history` — 用户推送历史（batch_id 外键 ON DELETE CASCADE，UNIQUE(user_id, article_id)）
 - 结构定义在 `db.py` 的 `init_db()` 中，后续改表直接改这个函数
 - 不使用迁移框架；改表后删除 `data.db` 重新运行即可重建
