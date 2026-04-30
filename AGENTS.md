@@ -68,7 +68,11 @@ uv run python migrate.py         # 同上（独立入口）
 ## Project structure
 - `main.py` — 入口；参数解析和子命令分发
 - `commands.py` — 子命令处理模块；每个子命令的处理函数
-- `rss.py` — RSS 数据层；拉取、解析、存储 RSS 数据
+- `rss.py` — RSS 数据层；拉取、解析、存储 RSS 数据；解析时自动提取 DOI，摘要为空时通过 CrossRef API 补全
+- `abstract_fetcher.py` — DOI 摘要补全模块；调用 CrossRef API 按 DOI 查询摘要
+  - 公开函数：`fetch_abstract_by_doi(doi) -> str | None`
+  - 自动剥离 JATS XML 标签，返回纯文本
+  - 限流 1 req/s；可通过 `.env` 中 `CROSSREF_MAILTO` 进入 polite pool
 - `users.py` — 用户业务层；用户订阅管理和早报生成
 - `generate_report.py` — AI 早报生成模块；智能筛选候选文章，调用 DeepSeek API 生成 Markdown 早报和语音播报稿
   - 可被其他脚本导入（导入不触发副作用）
@@ -85,9 +89,9 @@ uv run python migrate.py         # 同上（独立入口）
 - `db.py` — SQLite 数据库模块（init_db, ensure_feed, get_latest_raw_feed, save_raw_feed, save_article, ensure_user, ensure_subscription, create_push_batch, mark_article_pushed, reset_user_history, get_user_history, get_push_batches, get_batch, get_batch_articles, update_batch_report, update_batch_voice, update_batch_tts, migrate, get_unpushed_articles_with_embeddings, get_articles_without_embedding, update_article_embedding, batch_update_embeddings）
 - `migrate.py` — 独立迁移入口脚本；调用 db.migrate() 执行所有未应用的迁移
 - `migrations/` — SQL 迁移文件目录（按 `NNN_description.sql` 命名，如 `001_initial.sql`）
-- `feeds.json` — feed 源配置（name + url）
+- `feeds.json` — feed 源配置（按出版商分组：publishers → {publisher_key → {feeds: [{name, url}]}}）
 - `users.json` — 用户与订阅配置（name + subscriptions + interests，interests 用于辅助 AI 筛选文章）
-- `.env` — 环境变量（`DEEPSEEK_API_KEY`、`MIMO_API_KEY`，已加入 .gitignore）
+- `.env` — 环境变量（`DEEPSEEK_API_KEY`、`MIMO_API_KEY`、`CROSSREF_MAILTO`，已加入 .gitignore）
 - `prompts/` — LLM 提示词文件（`report_system.txt` 和 `voice_system.txt` 和 `select_system.txt`，修改提示词只需编辑这三个文件）
 - `reports/` — 生成的早报输出目录（`YYYY-MM-DD.md` + `YYYY-MM-DD-voice.txt` + `YYYY-MM-DD-voice.wav`，已加入 .gitignore）
 - `data.db` — SQLite 数据库文件（已加入 .gitignore）
@@ -97,6 +101,7 @@ uv run python migrate.py         # 同上（独立入口）
 main.py
   └── commands.py
         ├── rss.py
+        │     └── abstract_fetcher.py
         └── users.py
               ├── generate_report.py
               ├── tts.py
@@ -105,9 +110,9 @@ main.py
 
 ## Database
 - 八张表（含迁移版本表）：
-  - `feeds` — RSS 源信息（name, url）
+  - `feeds` — RSS 源信息（name, url, publisher）
   - `raw_feeds` — 每次拉取的原始 XML（SHA-256 去重）
-  - `articles` — 解析后的文章（link UNIQUE 去重，published 为 ISO 8601 格式，authors 为 JSON 数组，embedding BLOB 存储 384 维 float32 向量）
+  - `articles` — 解析后的文章（link UNIQUE 去重，published 为 ISO 8601 格式，authors 为 JSON 数组，doi TEXT 存储 DOI，embedding BLOB 存储 384 维 float32 向量）
   - `users` — 用户（name UNIQUE, active BOOLEAN, interests TEXT）
   - `subscriptions` — 用户与 feed 的多对多订阅关系（UNIQUE(user_id, feed_id)）
   - `push_batches` — 推送批次（user_id, created_at, report, voice_script, tts_audio_path），每次 run 为每个用户创建一个批次
@@ -127,6 +132,12 @@ main.py
 ## Adding a new feed
 1. 在 `feeds.json` 的 `feeds` 数组中添加 `{"name": "...", "url": "..."}`
 2. 运行 `uv run python main.py fetch`
+
+## Adding a new publisher
+1. 在 `feeds.json` 的 `publishers` 下新增出版商分组，添加该出版商的 feeds
+2. 在 `rss.py` 中编写 `_parse_entry_xxx(entry)` 解析函数，处理该出版商 RSS 的特殊格式（日期字段、摘要、作者等）
+3. 将解析函数注册到 `ENTRY_PARSERS` 字典
+4. 若该出版商 RSS 不提供摘要，解析函数中将 `summary` 设为 `""`，由 CrossRef API 自动通过 DOI 补全
 
 ## Conventions
 - Code comments and docstrings are in Chinese (Mandarin)

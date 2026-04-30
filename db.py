@@ -66,12 +66,21 @@ def migrate(conn):
             print(f"  [迁移] 已应用版本 {version}: {mf.name}")
 
 
-def ensure_feed(conn, name, url):
-    """确保 feeds 表中存在该源，返回 feed_id。"""
+def ensure_feed(conn, name, url, publisher=None):
+    """确保 feeds 表中存在该源，返回 feed_id。若已存在则更新 publisher。"""
     row = conn.execute("SELECT id FROM feeds WHERE url = ?", (url,)).fetchone()
     if row:
+        if publisher:
+            conn.execute(
+                "UPDATE feeds SET publisher = ? WHERE id = ?",
+                (publisher, row["id"]),
+            )
+            conn.commit()
         return row["id"]
-    cur = conn.execute("INSERT INTO feeds (name, url) VALUES (?, ?)", (name, url))
+    cur = conn.execute(
+        "INSERT INTO feeds (name, url, publisher) VALUES (?, ?, ?)",
+        (name, url, publisher),
+    )
     conn.commit()
     return cur.lastrowid
 
@@ -117,8 +126,8 @@ def save_article(conn, feed_id, article, embedding=None):
     if exists:
         return False
     conn.execute(
-        "INSERT INTO articles (feed_id, link, title, summary, published, authors, embedding) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO articles (feed_id, link, title, summary, published, authors, doi, embedding) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             feed_id,
             article["link"],
@@ -126,6 +135,7 @@ def save_article(conn, feed_id, article, embedding=None):
             article["summary"],
             article["published"],
             json.dumps(article["authors"], ensure_ascii=False),
+            article.get("doi", ""),
             embedding,
         ),
     )
@@ -205,7 +215,7 @@ def get_today_articles(conn, user_id, today):
         "FROM articles a "
         "JOIN feeds f ON a.feed_id = f.id "
         "JOIN subscriptions s ON s.feed_id = f.id "
-        "WHERE s.user_id = ? AND substr(a.published, 1, 10) = ? "
+        "WHERE s.user_id = ? AND substr(a.published, 1, 10) = ? AND a.summary IS NOT NULL "
         "ORDER BY a.published DESC",
         (user_id, today),
     ).fetchall()
@@ -228,6 +238,7 @@ def get_unpushed_subscribed_articles(conn, user_id, exclude_ids, limit):
         f"JOIN feeds f ON a.feed_id = f.id "
         f"JOIN subscriptions s ON s.feed_id = f.id "
         f"WHERE s.user_id = ? {exclude_clause} "
+        f"AND a.summary IS NOT NULL "
         f"AND a.id NOT IN (SELECT article_id FROM user_article_history WHERE user_id = ?) "
         f"ORDER BY RANDOM() "
         f"LIMIT ?",
@@ -250,7 +261,7 @@ def get_unpushed_all_articles(conn, user_id, exclude_ids, limit):
         f"SELECT a.id, a.title, a.authors, a.link, a.summary, a.published, a.embedding, f.name AS feed_name "
         f"FROM articles a "
         f"JOIN feeds f ON a.feed_id = f.id "
-        f"WHERE 1=1 {exclude_clause} "
+        f"WHERE a.summary IS NOT NULL {exclude_clause} "
         f"AND a.id NOT IN (SELECT article_id FROM user_article_history WHERE user_id = ?) "
         f"ORDER BY RANDOM() "
         f"LIMIT ?",
@@ -547,7 +558,7 @@ def get_unpushed_articles_with_embeddings(conn, user_id, exclude_ids=None):
         f"a.embedding, f.name AS feed_name "
         f"FROM articles a "
         f"JOIN feeds f ON a.feed_id = f.id "
-        f"WHERE a.embedding IS NOT NULL {exclude_clause} "
+        f"WHERE a.embedding IS NOT NULL AND a.summary IS NOT NULL {exclude_clause} "
         f"AND a.id NOT IN (SELECT article_id FROM user_article_history WHERE user_id = ?)",
         params,
     ).fetchall()

@@ -105,7 +105,7 @@ def build_selection_prompt(candidates, interests=None):
         lines.append(f"标题: {a['title']}")
         lines.append(f"作者: {authors}")
         lines.append(f"链接: {a['link']}")
-        lines.append(f"摘要: {a['summary']}")
+        lines.append(f"摘要: {a['summary'] or '无'}")
         lines.append("")
 
     return "\n".join(lines)
@@ -146,7 +146,7 @@ def build_user_prompt(date, articles):
         lines.append(f"标题: {a['title']}")
         lines.append(f"作者: {authors}")
         lines.append(f"链接: {a['link']}")
-        lines.append(f"摘要: {a['summary']}")
+        lines.append(f"摘要: {a['summary'] or '无'}")
         lines.append("")
 
     return "\n".join(lines)

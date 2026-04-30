@@ -1,24 +1,33 @@
 """RSS 数据获取和解析模块。"""
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 
 import feedparser
 import requests
 
+from abstract_fetcher import fetch_abstract_by_doi
 from db import ensure_feed, get_latest_raw_feed, save_raw_feed, save_article
 
 CACHE_TTL = timedelta(hours=23)
 
+_DOI_RE = re.compile(r"(10\.\d{4,9}/[^\s]+)")
+
 
 def load_feeds(path="feeds.json"):
-    """读取配置文件，返回 feed 列表。"""
+    """读取配置文件，返回展平的 feed 列表，每项附带 publisher 字段。"""
     with open(path) as f:
-        return json.load(f)["feeds"]
+        data = json.load(f)
+    result = []
+    for publisher, group in data["publishers"].items():
+        for feed in group["feeds"]:
+            result.append({**feed, "publisher": publisher})
+    return result
 
 
-def _parse_date(raw):
+def _parse_date_rfc2822(raw):
     """将 RFC 2822 日期字符串转为 ISO 8601 格式，解析失败时返回原始字符串。"""
     try:
         return parsedate_to_datetime(raw).isoformat()
@@ -26,38 +35,101 @@ def _parse_date(raw):
         return raw
 
 
-def parse_entry(entry):
-    """从一条 feedparser entry 中提取字段，返回干净的字典。"""
+def _extract_doi(entry):
+    """从 feedparser entry 中尽力提取 DOI。"""
+    for key in ("prism_doi", "doi", "dc_identifier"):
+        val = entry.get(key, "")
+        if val and val.startswith("10."):
+            return val.strip()
+    for field in ("link", "id"):
+        val = entry.get(field, "")
+        m = _DOI_RE.search(val)
+        if m:
+            return m.group(1)
+    return ""
 
-    # authors 字段是分号分隔的字符串，如 "Alice;Bob;Carol;"
-    # 拆成列表，去掉末尾空串
+
+# ---------------------------------------------------------------------------
+# 出版商专用解析函数
+# ---------------------------------------------------------------------------
+
+def _parse_entry_ieee(entry):
+    """IEEE RSS：summary 是摘要，published 是 RFC 2822 日期，authors 分号分隔。"""
     raw_authors = entry.get("authors", "")
-    author_list = [a.strip() for a in raw_authors.split(";") if a.strip()]
+    if isinstance(raw_authors, list):
+        author_list = [a["name"] for a in raw_authors if isinstance(a, dict) and a.get("name")]
+    else:
+        author_list = [a.strip() for a in raw_authors.split(";") if a.strip()]
 
     return {
         "title": entry.get("title", ""),
         "link": entry.get("link", ""),
-        "summary": entry.get("summary", ""),
-        "published": _parse_date(entry.get("published", "")),
-        "pub_year": entry.get("pubyear", ""),
-        "volume": entry.get("volume", ""),
-        "issue": entry.get("issue", ""),
-        "start_page": entry.get("startpage", ""),
-        "end_page": entry.get("endpage", ""),
+        "summary": entry.get("summary") or None,
+        "published": _parse_date_rfc2822(entry.get("published", "")),
+        "doi": _extract_doi(entry),
         "authors": author_list,
     }
 
 
+def _parse_entry_informs(entry):
+    """INFORMS RSS：summary 无摘要（需 DOI 补全），日期在 updated/prism_coverdate，authors 是 dict 列表。"""
+    raw_authors = entry.get("authors", [])
+    if isinstance(raw_authors, list):
+        author_list = [a["name"] for a in raw_authors if isinstance(a, dict) and a.get("name")]
+    else:
+        author_list = [a.strip() for a in raw_authors.split(";") if a.strip()]
+
+    published = ""
+    for field in ("updated", "prism_coverdate", "prism_coverdisplaydate"):
+        val = entry.get(field, "")
+        if val:
+            published = val
+            break
+
+    return {
+        "title": entry.get("title", ""),
+        "link": entry.get("link", ""),
+        "summary": None,
+        "published": published,
+        "doi": _extract_doi(entry),
+        "authors": author_list,
+    }
+
+
+ENTRY_PARSERS = {
+    "ieee": {
+        "parser": _parse_entry_ieee,
+        "enrich_abstract": False,
+    },
+    "informs": {
+        "parser": _parse_entry_informs,
+        "enrich_abstract": True,
+    },
+}
+
+
+def _get_publisher_config(publisher):
+    """根据出版商名称返回配置，未知出版商抛出异常。"""
+    if publisher not in ENTRY_PARSERS:
+        raise ValueError(f"未知出版商: {publisher!r}，请在 ENTRY_PARSERS 中注册解析函数")
+    return ENTRY_PARSERS[publisher]
+
+
+# ---------------------------------------------------------------------------
+# fetch / parse 主流程
+# ---------------------------------------------------------------------------
+
 def fetch_and_store_raw_feeds(conn, force=False):
-    """遍历所有 feed 源，从 URL 拉取 RSS 存入 raw_feeds 表（24 小时内缓存有效则跳过）。"""
+    """遍历所有 feed 源，从 URL 拉取 RSS 存入 raw_feeds 表（23 小时内缓存有效则跳过）。"""
     feeds = load_feeds()
     now = datetime.now(timezone.utc)
 
     for feed_cfg in feeds:
         name = feed_cfg["name"]
         url = feed_cfg["url"]
+        publisher = feed_cfg.get("publisher")
 
-        feed_id = ensure_feed(conn, name, url)
+        feed_id = ensure_feed(conn, name, url, publisher)
 
         if not force:
             latest_fetched_at = get_latest_raw_feed(conn, feed_id)
@@ -96,16 +168,39 @@ def fetch_and_store_raw_feeds(conn, force=False):
 
 
 def parse_and_store_articles(conn):
-    """从 raw_feeds 表读取所有原始 XML，解析后存入 articles 表。"""
+    """从 raw_feeds 表读取所有原始 XML，解析后存入 articles 表。
+    摘要为空时通过 CrossRef API 按 DOI 补全。
+    """
     rows = conn.execute(
-        "SELECT rf.feed_id, rf.raw_content, f.name "
+        "SELECT rf.feed_id, rf.raw_content, f.name, f.publisher "
         "FROM raw_feeds rf JOIN feeds f ON rf.feed_id = f.id"
     ).fetchall()
     for row in rows:
+        publisher = row["publisher"] or ""
+        try:
+            config = _get_publisher_config(publisher)
+        except ValueError as e:
+            print(f"  [跳过] {row['name']}: {e}")
+            continue
+
+        parse_entry = config["parser"]
+        enrich = config["enrich_abstract"]
+
         parsed = feedparser.parse(row["raw_content"])
         new_count = 0
+        enriched = 0
         for entry in parsed.entries:
             article = parse_entry(entry)
+            if enrich and not article["summary"] and article["doi"]:
+                abstract = fetch_abstract_by_doi(article["doi"])
+                if abstract:
+                    article["summary"] = abstract
+                    enriched += 1
+                else:
+                    print(f"    [警告] 无法获取摘要: {article['title'][:60]}")
             if save_article(conn, row["feed_id"], article):
                 new_count += 1
-        print(f"  [{row['name']}] 新增 {new_count} 篇，共 {len(parsed.entries)} 篇")
+        msg = f"  [{row['name']}] 新增 {new_count} 篇，共 {len(parsed.entries)} 篇"
+        if enriched:
+            msg += f"（{enriched} 篇通过 DOI 补全摘要）"
+        print(msg)
