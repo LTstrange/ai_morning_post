@@ -97,6 +97,11 @@ def main():
     user_activate_parser = user_subparsers.add_parser("activate", help="激活用户")
     user_activate_parser.add_argument("username", help="用户名")
 
+    # user rename
+    user_rename_parser = user_subparsers.add_parser("rename", help="重命名用户")
+    user_rename_parser.add_argument("username", help="当前用户名")
+    user_rename_parser.add_argument("new_name", help="新用户名")
+
     # user list
     user_subparsers.add_parser("list", help="列出所有用户")
 

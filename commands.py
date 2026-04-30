@@ -20,6 +20,7 @@ from db import (
     remove_subscription,
     get_user_subscriptions,
     set_user_interests,
+    rename_user,
     get_articles_without_embedding,
     batch_update_embeddings,
 )
@@ -281,6 +282,17 @@ def cmd_user(args):
             else:
                 activate_user(conn, user["id"])
                 print(f'用户 "{args.username}" 已激活')
+
+    elif args.user_action == "rename":
+        user = _resolve_target_user(conn, args.username)
+        if user:
+            new_name = args.new_name
+            existing = get_user(conn, new_name)
+            if existing:
+                print(f'用户名 "{new_name}" 已被占用')
+            else:
+                rename_user(conn, user["id"], new_name)
+                print(f'已将用户 "{args.username}" 重命名为 "{new_name}"')
 
     elif args.user_action == "list":
         users = list_users(conn)

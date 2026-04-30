@@ -517,6 +517,12 @@ def get_user_subscriptions(conn, user_id):
     ).fetchall()
 
 
+def rename_user(conn, user_id, new_name):
+    """重命名用户。"""
+    conn.execute("UPDATE users SET name = ? WHERE id = ?", (new_name, user_id))
+    conn.commit()
+
+
 def set_user_interests(conn, user_id, interests):
     """设置用户研究兴趣文本。"""
     conn.execute(
