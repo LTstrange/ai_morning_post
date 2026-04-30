@@ -69,6 +69,9 @@ uv run python migrate.py         # 同上（独立入口）
 - `main.py` — 入口；参数解析和子命令分发
 - `commands.py` — 子命令处理模块；每个子命令的处理函数
 - `rss.py` — RSS 数据层；拉取、解析、存储 RSS 数据；解析时自动提取 DOI，摘要为空时通过 CrossRef API 补全
+  - 按出版商分组解析：每个出版商一个 `_parse_entry_xxx(entry)` 函数，通过 `ENTRY_PARSERS` 字典分发
+  - `ENTRY_PARSERS` 每项包含 `parser`（解析函数）和 `enrich_abstract`（是否需要 CrossRef 补全）
+  - 未知出版商会报错并跳过，不影响已适配出版商
 - `abstract_fetcher.py` — DOI 摘要补全模块；调用 CrossRef API 按 DOI 查询摘要
   - 公开函数：`fetch_abstract_by_doi(doi) -> str | None`
   - 自动剥离 JATS XML 标签，返回纯文本
@@ -130,14 +133,17 @@ main.py
 3. 运行 `uv run python main.py migrate` 应用迁移
 
 ## Adding a new feed
-1. 在 `feeds.json` 的 `feeds` 数组中添加 `{"name": "...", "url": "..."}`
+1. 在 `feeds.json` 对应出版商的 `feeds` 数组中添加 `{"name": "...", "url": "..."}`
 2. 运行 `uv run python main.py fetch`
 
 ## Adding a new publisher
 1. 在 `feeds.json` 的 `publishers` 下新增出版商分组，添加该出版商的 feeds
 2. 在 `rss.py` 中编写 `_parse_entry_xxx(entry)` 解析函数，处理该出版商 RSS 的特殊格式（日期字段、摘要、作者等）
 3. 将解析函数注册到 `ENTRY_PARSERS` 字典
-4. 若该出版商 RSS 不提供摘要，解析函数中将 `summary` 设为 `""`，由 CrossRef API 自动通过 DOI 补全
+4. 若该出版商 RSS 不提供摘要，解析函数中将 `summary` 设为 `None`，并在 `ENTRY_PARSERS` 中设置 `"enrich_abstract": True`，由 CrossRef API 自动通过 DOI 补全
+
+### 已知不支持的出版商
+- **Elsevier (ScienceDirect)**：RSS 不提供摘要、DOI、独立作者和日期字段（全部嵌在 description HTML 中），且 Elsevier 不向 CrossRef 上传摘要，无法通过 DOI 补全
 
 ## Conventions
 - Code comments and docstrings are in Chinese (Mandarin)
