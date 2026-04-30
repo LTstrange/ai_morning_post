@@ -117,6 +117,7 @@ def cmd_history(args):
         label = " / ".join(label_parts) if label_parts else "所有用户"
         print(f"=== {label} 的推送历史 ===")
 
+        limit = getattr(args, "limit", 10) or None
         history = get_user_history(
             conn,
             user_id=user_id,
@@ -124,6 +125,7 @@ def cmd_history(args):
             date_str=date_str,
             date_from=date_from,
             date_to=date_to,
+            limit=limit,
         )
         if not history:
             print("暂无推送记录")
@@ -132,6 +134,8 @@ def cmd_history(args):
                 print(
                     f"  [批次 #{h['batch_id']}] [{h['user_name']}] {h['title']} ({h['pushed_at']})"
                 )
+            if limit and len(history) >= limit:
+                print(f"\n  （仅显示最近 {limit} 条，使用 --limit 0 查看全部）")
 
     elif args.history_action == "reset":
         user = _resolve_user(conn, getattr(args, "username", None))

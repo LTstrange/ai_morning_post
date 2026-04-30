@@ -315,7 +315,13 @@ def reset_user_history(
 
 
 def get_user_history(
-    conn, user_id=None, batch_id=None, date_str=None, date_from=None, date_to=None
+    conn,
+    user_id=None,
+    batch_id=None,
+    date_str=None,
+    date_from=None,
+    date_to=None,
+    limit=None,
 ):
     """获取用户推送历史。
 
@@ -323,6 +329,7 @@ def get_user_history(
     - batch_id: 限定批次
     - date_str: 限定日期（YYYY-MM-DD）
     - date_from / date_to: 日期范围
+    - limit: 最大返回条数（None 表示不限）
     """
     base = (
         "SELECT u.name AS user_name, a.title, b.created_at AS pushed_at, b.id AS batch_id "
@@ -353,7 +360,11 @@ def get_user_history(
     if conditions:
         base += "WHERE " + " AND ".join(conditions) + " "
 
-    base += "ORDER BY u.name, b.created_at DESC"
+    base += "ORDER BY b.created_at DESC, u.name"
+
+    if limit:
+        base += " LIMIT ?"
+        params.append(limit)
 
     return conn.execute(base, params).fetchall()
 

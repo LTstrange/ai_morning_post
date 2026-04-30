@@ -65,6 +65,12 @@ def main():
     history_show_parser.add_argument(
         "--to", dest="date_to", help="结束日期（YYYY-MM-DD）"
     )
+    history_show_parser.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="显示条数（默认 10，0 表示不限）",
+    )
 
     # history reset
     history_reset_parser = history_subparsers.add_parser("reset", help="重置推送历史")
