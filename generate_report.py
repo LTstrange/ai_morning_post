@@ -1,4 +1,4 @@
-"""智能筛选候选论文，调用 DeepSeek 生成中文早报，输出为 Markdown 文件。"""
+"""智能筛选候选论文，调用 DeepSeek 生成中文早报。"""
 
 import json
 import os
@@ -13,8 +13,6 @@ from db import (
     batch_update_embeddings,
 )
 from embedding import compute_embedding, semantic_search
-
-REPORTS_DIR = Path(__file__).parent / "reports"
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 

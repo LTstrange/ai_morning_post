@@ -1,11 +1,14 @@
 """子命令处理模块。"""
 
 import json
+import shutil
+from pathlib import Path
 
 from db import (
     reset_user_history,
     get_user_history,
     get_push_batches,
+    get_batch,
     migrate,
     get_connection,
     add_user,
@@ -395,6 +398,64 @@ def cmd_user(args):
             with open(args.file, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, ensure_ascii=False, indent=2)
             print(f"已导出 {len(users)} 个用户到 {args.file}")
+
+    conn.close()
+
+
+def cmd_export(args):
+    """处理 export 子命令：从数据库导出批次产物到文件。"""
+    conn = init_connection()
+    batch = get_batch(conn, args.batch)
+    if not batch:
+        print(f"未找到批次 #{args.batch}")
+        conn.close()
+        return
+
+    user_name = batch["user_name"]
+    batch_date = batch["created_at"][:10]
+    any_flag = args.report or args.voice or args.tts
+    export_report = args.report if any_flag else True
+    export_voice = args.voice if any_flag else True
+    export_tts = args.tts if any_flag else True
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    exported = 0
+
+    if export_report:
+        if batch["report"]:
+            path = output_dir / f"{batch_date}-{user_name}-report.md"
+            path.write_text(batch["report"], encoding="utf-8")
+            print(f"  已导出早报: {path}")
+            exported += 1
+        else:
+            print("  该批次没有早报内容")
+
+    if export_voice:
+        if batch["voice_script"]:
+            path = output_dir / f"{batch_date}-{user_name}-voice.txt"
+            path.write_text(batch["voice_script"], encoding="utf-8")
+            print(f"  已导出语音稿: {path}")
+            exported += 1
+        else:
+            print("  该批次没有语音稿内容")
+
+    if export_tts:
+        if batch["tts_audio_path"]:
+            src = Path(batch["tts_audio_path"])
+            if src.exists():
+                dst = output_dir / f"{batch_date}-{user_name}.mp3"
+                shutil.copy2(src, dst)
+                print(f"  已导出音频: {dst}")
+                exported += 1
+            else:
+                print(f"  音频文件不存在: {src}")
+        else:
+            print("  该批次没有音频文件")
+
+    if exported == 0:
+        print("没有可导出的内容")
 
     conn.close()
 

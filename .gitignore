@@ -27,8 +27,11 @@ wheels/
 users.json
 feeds.json
 
-# 生成的早报
+# 生成的早报（旧目录，已废弃）
 reports/
+
+# 音频存储
+audio/
 
 # 本地模型缓存
 models/
