@@ -135,7 +135,7 @@ def generate_for_users(
     gen_report=True,
     gen_voice=True,
     gen_tts=False,
-    dry_run=False,
+
 ):
     """为用户生成早报内容的核心逻辑：选文 + 创建批次 + 生成产物。"""
     load_dotenv()
@@ -175,16 +175,12 @@ def generate_for_users(
         selected = select_articles(candidates, interests)
         print(f"  [{user_name}] 已选择 {len(selected)} 篇推荐文章")
 
-        if not dry_run:
-            current_batch_id = create_push_batch(conn, user_id)
-            for article in selected:
-                mark_article_pushed(conn, user_id, article["id"], current_batch_id)
-            print(
-                f"  [{user_name}] 已标记 {len(selected)} 篇文章为已推送（批次 #{current_batch_id}）"
-            )
-        else:
-            current_batch_id = None
-            print(f"  [{user_name}] [DRY RUN] 跳过标记已推送文章")
+        current_batch_id = create_push_batch(conn, user_id)
+        for article in selected:
+            mark_article_pushed(conn, user_id, article["id"], current_batch_id)
+        print(
+            f"  [{user_name}] 已标记 {len(selected)} 篇文章为已推送（批次 #{current_batch_id}）"
+        )
 
         user_prompt = build_user_prompt(today, selected)
         _generate_outputs(

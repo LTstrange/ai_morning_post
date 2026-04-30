@@ -17,7 +17,7 @@ uv run python main.py run -u Alice             # 只为 Alice 执行
 uv run python main.py run --report             # 只生成 Markdown 早报
 uv run python main.py run --voice              # 只生成语音播报稿
 uv run python main.py run --tts                # 生成语音音频（需要 MIMO_API_KEY）
-uv run python main.py run --dry-run            # 模拟运行，不标记文章为已推送
+uv run python main.py run --all                # 生成早报、语音稿和语音音频
 
 # 用户管理
 uv run python main.py user add Alice           # 添加用户（已存在则跳过）
@@ -38,6 +38,7 @@ uv run python main.py regen 5                  # 用批次 #5 的数据生成早
 uv run python main.py regen 5 --voice          # 用批次 #5 的早报生成语音稿
 uv run python main.py regen 5 --report         # 重新生成早报（语音稿自动失效）
 uv run python main.py regen 5 --tts            # 用批次 #5 的语音稿生成音频
+uv run python main.py regen 5 --all            # 重新生成早报、语音稿和音频
 
 # 历史管理
 uv run python main.py history show             # 查看所有用户的推送历史

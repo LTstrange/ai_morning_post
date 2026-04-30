@@ -42,6 +42,9 @@ def main():
     regen_parser.add_argument(
         "--tts", action="store_true", help="生成语音音频（需要 MIMO_API_KEY）"
     )
+    regen_parser.add_argument(
+        "--all", action="store_true", help="生成早报、语音稿和语音音频"
+    )
 
     # history 子命令
     history_parser = subparsers.add_parser("history", help="管理推送历史")
@@ -179,7 +182,7 @@ def main():
         "--tts", action="store_true", help="生成语音音频（需要 MIMO_API_KEY）"
     )
     run_parser.add_argument(
-        "--dry-run", action="store_true", help="模拟运行，不标记文章为已推送"
+        "--all", action="store_true", help="生成早报、语音稿和语音音频"
     )
 
     args = parser.parse_args()

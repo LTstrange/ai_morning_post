@@ -53,6 +53,8 @@ def cmd_parse(args):
 
 def _resolve_gen_flags(args):
     """解析 report/voice/tts 标志，都未指定时默认生成 report 和 voice。"""
+    if getattr(args, "all", False):
+        return True, True, True
     any_flag = args.report or args.voice or args.tts
     return (
         args.report if any_flag else True,
@@ -217,7 +219,7 @@ def cmd_run(args):
         gen_report=gen_report,
         gen_voice=gen_voice,
         gen_tts=gen_tts,
-        dry_run=args.dry_run,
+
     )
     print()
     conn.close()
