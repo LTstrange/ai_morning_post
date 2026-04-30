@@ -129,7 +129,7 @@ def select_articles(candidates, interests=None):
             # 如果没有有效索引，返回前 3 篇
             return candidates[:3]
         return [candidates[i] for i in selected_indices]
-    except (json.JSONDecodeError, KeyError):
+    except json.JSONDecodeError, KeyError:
         # 解析失败，返回前 3 篇
         print("ERROR: ai 挑选失败，返回候选的前三篇")
         return candidates[:3]
