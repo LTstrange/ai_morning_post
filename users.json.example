@@ -2,7 +2,8 @@
   "users": [
     {
       "name": "Alice",
-      "subscriptions": ["Example Feed 1", "Example Feed 2"]
+      "subscriptions": ["Example Feed 1", "Example Feed 2"],
+      "interests": "我想要了解最近几天或者一个月的科研论文进展，重点是我关注的RGB-T跟踪，并且涉及Mamba架构的文章。"
     }
   ]
 }

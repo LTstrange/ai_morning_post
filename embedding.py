@@ -11,13 +11,20 @@ _model = None
 
 
 def _get_model():
-    """懒加载 SentenceTransformer 模型（单例），模型缓存在项目 models/ 目录下。"""
+    """懒加载 SentenceTransformer 模型（单例），模型缓存在项目 models/ 目录下。优先离线加载。"""
     global _model
     if _model is None:
         from sentence_transformers import SentenceTransformer
 
         MODELS_DIR.mkdir(exist_ok=True)
-        _model = SentenceTransformer(MODEL_NAME, cache_folder=str(MODELS_DIR))
+        try:
+            _model = SentenceTransformer(
+                MODEL_NAME, cache_folder=str(MODELS_DIR), local_files_only=True
+            )
+        except OSError:
+            _model = SentenceTransformer(
+                MODEL_NAME, cache_folder=str(MODELS_DIR)
+            )
     return _model
 
 
