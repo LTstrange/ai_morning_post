@@ -22,9 +22,7 @@ def _get_model():
                 MODEL_NAME, cache_folder=str(MODELS_DIR), local_files_only=True
             )
         except OSError:
-            _model = SentenceTransformer(
-                MODEL_NAME, cache_folder=str(MODELS_DIR)
-            )
+            _model = SentenceTransformer(MODEL_NAME, cache_folder=str(MODELS_DIR))
     return _model
 
 

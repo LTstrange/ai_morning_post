@@ -28,7 +28,8 @@ def main():
     # parse 子命令
     parse_parser = subparsers.add_parser("parse", help="解析并存储文章")
     parse_parser.add_argument(
-        "--enrich", action="store_true",
+        "--enrich",
+        action="store_true",
         help="为已有的空摘要文章通过 CrossRef DOI 补全",
     )
 
@@ -150,15 +151,9 @@ def main():
     # export 子命令
     export_parser = subparsers.add_parser("export", help="从数据库导出批次产物到文件")
     export_parser.add_argument("batch", type=int, help="批次 ID")
-    export_parser.add_argument(
-        "--report", action="store_true", help="只导出早报"
-    )
-    export_parser.add_argument(
-        "--voice", action="store_true", help="只导出语音稿"
-    )
-    export_parser.add_argument(
-        "--tts", action="store_true", help="只导出音频"
-    )
+    export_parser.add_argument("--report", action="store_true", help="只导出早报")
+    export_parser.add_argument("--voice", action="store_true", help="只导出语音稿")
+    export_parser.add_argument("--tts", action="store_true", help="只导出音频")
     export_parser.add_argument(
         "-o", "--output-dir", default=".", help="输出目录（默认当前目录）"
     )

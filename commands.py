@@ -45,9 +45,10 @@ def cmd_parse(args):
     print("=== 解析并存储文章 ===")
     parse_and_store_articles(conn)
     if args.enrich:
-        from rss import enrich_missing_abstracts
-        print("\n=== 补全空摘要文章 ===")
-        enrich_missing_abstracts(conn)
+        from rss import enrich_missing_metadata
+
+        print("\n=== 补全缺失元数据 ===")
+        enrich_missing_metadata(conn)
     conn.close()
 
 
@@ -223,7 +224,6 @@ def cmd_run(args):
         gen_report=gen_report,
         gen_voice=gen_voice,
         gen_tts=gen_tts,
-
     )
     print()
     conn.close()

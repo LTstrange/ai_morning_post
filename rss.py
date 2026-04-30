@@ -8,8 +8,14 @@ from email.utils import parsedate_to_datetime
 import feedparser
 import requests
 
-from abstract_fetcher import fetch_abstract_by_doi
-from db import ensure_feed, get_latest_raw_feed, save_raw_feed, save_article, article_exists
+from abstract_fetcher import fetch_metadata_by_doi
+from db import (
+    ensure_feed,
+    get_latest_raw_feed,
+    save_raw_feed,
+    save_article,
+    article_exists,
+)
 
 CACHE_TTL = timedelta(hours=23)
 
@@ -53,11 +59,14 @@ def _extract_doi(entry):
 # 出版商专用解析函数
 # ---------------------------------------------------------------------------
 
+
 def _parse_entry_ieee(entry):
     """IEEE RSS：summary 是摘要，published 是 RFC 2822 日期，authors 分号分隔。"""
     raw_authors = entry.get("authors", "")
     if isinstance(raw_authors, list):
-        author_list = [a["name"] for a in raw_authors if isinstance(a, dict) and a.get("name")]
+        author_list = [
+            a["name"] for a in raw_authors if isinstance(a, dict) and a.get("name")
+        ]
     else:
         author_list = [a.strip() for a in raw_authors.split(";") if a.strip()]
 
@@ -75,7 +84,9 @@ def _parse_entry_informs(entry):
     """INFORMS RSS：summary 无摘要（需 DOI 补全），日期在 updated/prism_coverdate，authors 是 dict 列表。"""
     raw_authors = entry.get("authors", [])
     if isinstance(raw_authors, list):
-        author_list = [a["name"] for a in raw_authors if isinstance(a, dict) and a.get("name")]
+        author_list = [
+            a["name"] for a in raw_authors if isinstance(a, dict) and a.get("name")
+        ]
     else:
         author_list = [a.strip() for a in raw_authors.split(";") if a.strip()]
 
@@ -96,6 +107,45 @@ def _parse_entry_informs(entry):
     }
 
 
+def _strip_html(text):
+    """剥离 HTML 标签，返回纯文本。"""
+    return re.sub(r"<[^>]+>", "", text).strip()
+
+
+def _parse_entry_aap(entry):
+    """AAP (Silverchair) RSS：description 含 HTML 摘要，prism:doi 提供 DOI，无作者字段。"""
+    raw_summary = entry.get("summary") or entry.get("description") or ""
+    summary = _strip_html(raw_summary) or None
+
+    return {
+        "title": entry.get("title", ""),
+        "link": entry.get("link", ""),
+        "summary": summary,
+        "published": _parse_date_rfc2822(entry.get("published", "")),
+        "doi": _extract_doi(entry),
+        "authors": [],
+    }
+
+
+def _parse_authors_dict_list(raw_authors):
+    """从 feedparser 的 [{"name": "..."}] 格式提取作者列表。"""
+    if not isinstance(raw_authors, list):
+        return []
+    return [a["name"] for a in raw_authors if isinstance(a, dict) and a.get("name")]
+
+
+def _parse_entry_aaas(entry):
+    """AAAS (Science) RSS (RDF 1.0)：无摘要，有 authors，日期在 updated。"""
+    return {
+        "title": entry.get("title", ""),
+        "link": entry.get("link", ""),
+        "summary": None,
+        "published": entry.get("updated", ""),
+        "doi": _extract_doi(entry),
+        "authors": _parse_authors_dict_list(entry.get("authors", [])),
+    }
+
+
 ENTRY_PARSERS = {
     "ieee": {
         "parser": _parse_entry_ieee,
@@ -105,19 +155,31 @@ ENTRY_PARSERS = {
         "parser": _parse_entry_informs,
         "enrich_abstract": True,
     },
+    "aap": {
+        "parser": _parse_entry_aap,
+        "enrich_abstract": False,
+        "enrich_authors": True,
+    },
+    "aaas": {
+        "parser": _parse_entry_aaas,
+        "enrich_abstract": True,
+    },
 }
 
 
 def _get_publisher_config(publisher):
     """根据出版商名称返回配置，未知出版商抛出异常。"""
     if publisher not in ENTRY_PARSERS:
-        raise ValueError(f"未知出版商: {publisher!r}，请在 ENTRY_PARSERS 中注册解析函数")
+        raise ValueError(
+            f"未知出版商: {publisher!r}，请在 ENTRY_PARSERS 中注册解析函数"
+        )
     return ENTRY_PARSERS[publisher]
 
 
 # ---------------------------------------------------------------------------
 # fetch / parse 主流程
 # ---------------------------------------------------------------------------
+
 
 def fetch_and_store_raw_feeds(conn, force=False):
     """遍历所有 feed 源，从 URL 拉取 RSS 存入 raw_feeds 表（23 小时内缓存有效则跳过）。"""
@@ -184,50 +246,101 @@ def parse_and_store_articles(conn):
             continue
 
         parse_entry = config["parser"]
-        enrich = config["enrich_abstract"]
+        enrich_abs = config.get("enrich_abstract", False)
+        enrich_auth = config.get("enrich_authors", False)
 
         parsed = feedparser.parse(row["raw_content"])
         new_count = 0
-        enriched = 0
+        abstract_enriched = 0
+        authors_enriched = 0
         for entry in parsed.entries:
             article = parse_entry(entry)
             if article_exists(conn, article["link"]):
                 continue
-            if enrich and not article["summary"] and article["doi"]:
-                abstract = fetch_abstract_by_doi(article["doi"])
-                if abstract:
-                    article["summary"] = abstract
-                    enriched += 1
-                else:
+            need_abstract = enrich_abs and not article["summary"]
+            need_authors = enrich_auth and not article["authors"]
+            if (need_abstract or need_authors) and article["doi"]:
+                meta = fetch_metadata_by_doi(article["doi"])
+                if need_abstract and meta["abstract"]:
+                    article["summary"] = meta["abstract"]
+                    abstract_enriched += 1
+                elif need_abstract:
                     print(f"    [警告] 无法获取摘要: {article['title'][:60]}")
+                if need_authors and meta["authors"]:
+                    article["authors"] = meta["authors"]
+                    authors_enriched += 1
+                elif need_authors:
+                    print(f"    [警告] 无法获取作者: {article['title'][:60]}")
             if save_article(conn, row["feed_id"], article):
                 new_count += 1
         msg = f"  [{row['name']}] 新增 {new_count} 篇，共 {len(parsed.entries)} 篇"
-        if enriched:
-            msg += f"（{enriched} 篇通过 DOI 补全摘要）"
+        if abstract_enriched:
+            msg += f"（{abstract_enriched} 篇补全摘要）"
+        if authors_enriched:
+            msg += f"（{authors_enriched} 篇补全作者）"
         print(msg)
 
 
-def enrich_missing_abstracts(conn):
-    """为已有的空摘要文章通过 CrossRef DOI 补全。"""
+def enrich_missing_metadata(conn):
+    """根据 ENTRY_PARSERS 配置，为对应出版商的文章通过 CrossRef DOI 补全缺失的摘要和作者。"""
+    abstract_publishers = [
+        p for p, cfg in ENTRY_PARSERS.items() if cfg.get("enrich_abstract")
+    ]
+    authors_publishers = [
+        p for p, cfg in ENTRY_PARSERS.items() if cfg.get("enrich_authors")
+    ]
+
+    if not abstract_publishers and not authors_publishers:
+        print("  没有出版商需要补全")
+        return
+
+    conditions = []
+    params = []
+    if abstract_publishers:
+        placeholders = ",".join("?" * len(abstract_publishers))
+        conditions.append(f"(f.publisher IN ({placeholders}) AND a.summary IS NULL)")
+        params.extend(abstract_publishers)
+    if authors_publishers:
+        placeholders = ",".join("?" * len(authors_publishers))
+        conditions.append(f"(f.publisher IN ({placeholders}) AND a.authors = '[]')")
+        params.extend(authors_publishers)
+
     rows = conn.execute(
-        "SELECT id, title, doi FROM articles WHERE summary IS NULL AND doi != ''"
+        "SELECT a.id, a.title, a.doi, a.summary, a.authors, f.publisher "
+        "FROM articles a JOIN feeds f ON a.feed_id = f.id "
+        f"WHERE a.doi != '' AND ({' OR '.join(conditions)})",
+        params,
     ).fetchall()
+
     if not rows:
         print("  没有需要补全的文章")
         return
-    print(f"  找到 {len(rows)} 篇空摘要文章，开始补全...")
-    success = 0
+
+    print(f"  找到 {len(rows)} 篇待补全文章...")
+    abstract_ok = 0
+    authors_ok = 0
     for row in rows:
-        abstract = fetch_abstract_by_doi(row["doi"])
-        if abstract:
+        publisher = row["publisher"]
+        cfg = ENTRY_PARSERS.get(publisher, {})
+        need_abstract = cfg.get("enrich_abstract") and row["summary"] is None
+        need_authors = cfg.get("enrich_authors") and row["authors"] == "[]"
+        if not need_abstract and not need_authors:
+            continue
+        meta = fetch_metadata_by_doi(row["doi"])
+        if need_abstract and meta["abstract"]:
             conn.execute(
                 "UPDATE articles SET summary = ? WHERE id = ?",
-                (abstract, row["id"]),
+                (meta["abstract"], row["id"]),
             )
             conn.commit()
-            success += 1
-            print(f"    [补全] {row['title'][:60]}")
-        else:
-            print(f"    [跳过] {row['title'][:60]}")
-    print(f"  完成：{success}/{len(rows)} 篇补全成功")
+            abstract_ok += 1
+            print(f"    [摘要] {row['title'][:60]}")
+        if need_authors and meta["authors"]:
+            conn.execute(
+                "UPDATE articles SET authors = ? WHERE id = ?",
+                (json.dumps(meta["authors"], ensure_ascii=False), row["id"]),
+            )
+            conn.commit()
+            authors_ok += 1
+            print(f"    [作者] {row['title'][:60]}")
+    print(f"  完成：{abstract_ok} 篇补全摘要，{authors_ok} 篇补全作者")

@@ -29,11 +29,8 @@ def _throttle():
     _last_request_time = time.time()
 
 
-def fetch_abstract_by_doi(doi):
-    """通过 CrossRef API 查询 DOI 对应的摘要。
-
-    返回纯文本摘要字符串，查询失败或无摘要时返回 None。
-    """
+def _fetch_crossref(doi):
+    """查询 CrossRef API，返回 message 字典，失败时返回 None。"""
     if not doi:
         return None
 
@@ -45,7 +42,9 @@ def fetch_abstract_by_doi(doi):
         url += f"?mailto={urllib.parse.quote(mailto)}"
 
     headers = {
-        "User-Agent": f"AIMorningPost/1.0 (mailto:{mailto})" if mailto else "AIMorningPost/1.0",
+        "User-Agent": f"AIMorningPost/1.0 (mailto:{mailto})"
+        if mailto
+        else "AIMorningPost/1.0",
         "Accept": "application/json",
     }
 
@@ -59,8 +58,46 @@ def fetch_abstract_by_doi(doi):
         print(f"    [CrossRef] DOI {doi} 查询失败: {e}")
         return None
 
-    abstract = data.get("message", {}).get("abstract", "")
-    if not abstract:
-        return None
+    return data.get("message")
 
-    return _strip_jats(abstract)
+
+def _parse_authors(raw_authors):
+    """从 CrossRef author 列表提取 ["Given Family", ...] 格式的作者名。"""
+    result = []
+    for a in raw_authors:
+        given = a.get("given", "")
+        family = a.get("family", "")
+        name = f"{given} {family}".strip()
+        if name:
+            result.append(name)
+    return result
+
+
+def fetch_metadata_by_doi(doi):
+    """通过 CrossRef API 一次性查询 DOI 对应的摘要和作者。
+
+    返回 {"abstract": str|None, "authors": list}。
+    """
+    message = _fetch_crossref(doi)
+    if not message:
+        return {"abstract": None, "authors": []}
+    abstract_raw = message.get("abstract", "")
+    abstract = _strip_jats(abstract_raw) if abstract_raw else None
+    authors = _parse_authors(message.get("author", []))
+    return {"abstract": abstract, "authors": authors}
+
+
+def fetch_abstract_by_doi(doi):
+    """通过 CrossRef API 查询 DOI 对应的摘要。
+
+    返回纯文本摘要字符串，查询失败或无摘要时返回 None。
+    """
+    return fetch_metadata_by_doi(doi)["abstract"]
+
+
+def fetch_authors_by_doi(doi):
+    """通过 CrossRef API 查询 DOI 对应的作者列表。
+
+    返回 ["Given Family", ...] 格式的列表，查询失败或无作者时返回空列表。
+    """
+    return fetch_metadata_by_doi(doi)["authors"]

@@ -150,9 +150,16 @@ main.py
 2. 在 `rss.py` 中编写 `_parse_entry_xxx(entry)` 解析函数，处理该出版商 RSS 的特殊格式（日期字段、摘要、作者等）
 3. 将解析函数注册到 `ENTRY_PARSERS` 字典
 4. 若该出版商 RSS 不提供摘要，解析函数中将 `summary` 设为 `None`，并在 `ENTRY_PARSERS` 中设置 `"enrich_abstract": True`，由 CrossRef API 自动通过 DOI 补全
+5. 若该出版商 RSS 不提供作者，在 `ENTRY_PARSERS` 中设置 `"enrich_authors": True`，由 CrossRef API 自动通过 DOI 补全
+6. `parse_and_store_articles` 会对同一篇文章只调用一次 CrossRef API 同时补全摘要和作者
 
-### 已知不支持的出版商
-- **Elsevier (ScienceDirect)**：RSS 不提供摘要、DOI、独立作者和日期字段（全部嵌在 description HTML 中），且 Elsevier 不向 CrossRef 上传摘要，无法通过 DOI 补全
+### 已知不支持的期刊
+- **Elsevier (ScienceDirect)** 旗下期刊：RSS 不提供摘要、DOI、独立作者和日期字段（全部嵌在 description HTML 中），且 Elsevier 不向 CrossRef 上传摘要，无法通过 DOI 补全
+- **Neurology**（Wolters Kluwer）：RSS 为 RDF 1.0 格式，不提供摘要，且 Wolters Kluwer 不向 CrossRef 提交摘要；`dc:creator` 字段将作者名和单位混在一起无法解析
+- **Medicine**（LWW / Wolters Kluwer）：RSS 数据完整（有摘要、作者、DOI），但被 Cloudflare 保护，程序无法自动拉取
+- **Nature**：最新文章 DOI 注册到 CrossRef 有较大延迟，无法及时获取完整摘要
+
+注意：同一出版商旗下不同期刊的 RSS 格式和数据完整度可能不同，需逐个验证
 
 ## Conventions
 - Code comments and docstrings are in Chinese (Mandarin)

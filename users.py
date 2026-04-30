@@ -135,7 +135,6 @@ def generate_for_users(
     gen_report=True,
     gen_voice=True,
     gen_tts=False,
-
 ):
     """为用户生成早报内容的核心逻辑：选文 + 创建批次 + 生成产物。"""
     load_dotenv()

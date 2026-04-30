@@ -119,9 +119,12 @@ def save_raw_feed(conn, feed_id, raw_content):
 
 def article_exists(conn, link):
     """检查文章是否已存在（按 link 去重）。"""
-    return conn.execute(
-        "SELECT 1 FROM articles WHERE link = ? LIMIT 1", (link,)
-    ).fetchone() is not None
+    return (
+        conn.execute(
+            "SELECT 1 FROM articles WHERE link = ? LIMIT 1", (link,)
+        ).fetchone()
+        is not None
+    )
 
 
 def save_article(conn, feed_id, article, embedding=None):
