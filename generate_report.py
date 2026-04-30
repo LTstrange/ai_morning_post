@@ -10,7 +10,9 @@ from db import (
     get_today_articles,
     get_unpushed_subscribed_articles,
     get_unpushed_all_articles,
+    batch_update_embeddings,
 )
+from embedding import compute_embedding, semantic_search
 
 REPORTS_DIR = Path(__file__).parent / "reports"
 
@@ -27,35 +29,59 @@ VOICE_SYSTEM_PROMPT = _load_prompt("voice_system.txt")
 SELECT_SYSTEM_PROMPT = _load_prompt("select_system.txt")
 
 
-def fetch_candidate_articles(conn, user_id, today, target_count=10):
+def _ensure_embeddings(conn, candidates):
+    """检查候选文章的 embedding，缺失的批量计算并存入 DB。返回带 embedding 的 dict 列表。"""
+    result = []
+    updates = []
+    for a in candidates:
+        article = dict(a)
+        if article["embedding"] is None:
+            text = f"{article['title']} {article['summary'] or ''}"
+            emb = compute_embedding(text)
+            article["embedding"] = emb
+            updates.append((emb, article["id"]))
+        result.append(article)
+    if updates:
+        batch_update_embeddings(conn, updates)
+    return result
+
+
+def fetch_candidate_articles(
+    conn, user_id, today, target_count=10, interests=None, pool_size=50
+):
     """
     智能筛选候选文章：
-    1. 获取当天的论文（必须选）
-    2. 如果不够 target_count 篇，从用户订阅期刊中随机取未推送过的文章补充
-    3. 如果还不够，从所有期刊中随机取未推送过的文章补充
+    1. 三级策略取 pool_size 篇候选池
+    2. Lazy 补算缺失的 embedding
+    3. 有 interests → 语义排序取 top target_count
+       无 interests → 直接取前 target_count 篇
     返回 (候选文章列表, 当天文章列表)
     """
-    # 获取当天的文章
     today_articles = get_today_articles(conn, user_id, today)
     candidates = list(today_articles)
     candidate_ids = [a["id"] for a in candidates]
 
-    if len(candidates) < target_count:
-        # 从用户订阅期刊中取未推送过的文章
-        remaining = target_count - len(candidates)
+    if len(candidates) < pool_size:
+        remaining = pool_size - len(candidates)
         subscribed = get_unpushed_subscribed_articles(
             conn, user_id, candidate_ids, remaining
         )
         candidates.extend(subscribed)
         candidate_ids = [a["id"] for a in candidates]
 
-    if len(candidates) < target_count:
-        # 从所有期刊中取未推送过的文章
-        remaining = target_count - len(candidates)
+    if len(candidates) < pool_size:
+        remaining = pool_size - len(candidates)
         all_articles = get_unpushed_all_articles(
             conn, user_id, candidate_ids, remaining
         )
         candidates.extend(all_articles)
+
+    if interests and len(candidates) > target_count:
+        candidates = _ensure_embeddings(conn, candidates)
+        candidates = semantic_search(interests, candidates, top_k=target_count)
+
+    else:
+        candidates = candidates[:target_count]
 
     return candidates, today_articles
 

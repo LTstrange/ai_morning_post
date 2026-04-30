@@ -170,7 +170,9 @@ def generate_for_users(
         user_id, user_name, interests = user["id"], user["name"], user["interests"]
 
         print(f"  [{user_name}] 正在筛选候选文章...")
-        candidates, today_articles = fetch_candidate_articles(conn, user_id, today)
+        candidates, today_articles = fetch_candidate_articles(
+            conn, user_id, today, interests=interests
+        )
 
         if not candidates:
             print(f"  [{user_name}] 没有找到候选论文，跳过")

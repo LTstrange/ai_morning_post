@@ -108,7 +108,7 @@ def save_raw_feed(conn, feed_id, raw_content):
     return True
 
 
-def save_article(conn, feed_id, article):
+def save_article(conn, feed_id, article, embedding=None):
     """保存解析后的文章，link 相同则跳过。返回是否实际插入。"""
     exists = conn.execute(
         "SELECT 1 FROM articles WHERE link = ? LIMIT 1",
@@ -117,8 +117,8 @@ def save_article(conn, feed_id, article):
     if exists:
         return False
     conn.execute(
-        "INSERT INTO articles (feed_id, link, title, summary, published, authors) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO articles (feed_id, link, title, summary, published, authors, embedding) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
         (
             feed_id,
             article["link"],
@@ -126,6 +126,7 @@ def save_article(conn, feed_id, article):
             article["summary"],
             article["published"],
             json.dumps(article["authors"], ensure_ascii=False),
+            embedding,
         ),
     )
     conn.commit()
@@ -200,7 +201,7 @@ def mark_article_pushed(conn, user_id, article_id, batch_id):
 def get_today_articles(conn, user_id, today):
     """获取用户订阅期刊中当天发布的文章。"""
     rows = conn.execute(
-        "SELECT a.id, a.title, a.authors, a.link, a.summary, a.published, f.name AS feed_name "
+        "SELECT a.id, a.title, a.authors, a.link, a.summary, a.published, a.embedding, f.name AS feed_name "
         "FROM articles a "
         "JOIN feeds f ON a.feed_id = f.id "
         "JOIN subscriptions s ON s.feed_id = f.id "
@@ -222,7 +223,7 @@ def get_unpushed_subscribed_articles(conn, user_id, exclude_ids, limit):
         params = (user_id, *exclude_ids, user_id, limit)
 
     rows = conn.execute(
-        f"SELECT a.id, a.title, a.authors, a.link, a.summary, a.published, f.name AS feed_name "
+        f"SELECT a.id, a.title, a.authors, a.link, a.summary, a.published, a.embedding, f.name AS feed_name "
         f"FROM articles a "
         f"JOIN feeds f ON a.feed_id = f.id "
         f"JOIN subscriptions s ON s.feed_id = f.id "
@@ -246,7 +247,7 @@ def get_unpushed_all_articles(conn, user_id, exclude_ids, limit):
         params = (*exclude_ids, user_id, limit)
 
     rows = conn.execute(
-        f"SELECT a.id, a.title, a.authors, a.link, a.summary, a.published, f.name AS feed_name "
+        f"SELECT a.id, a.title, a.authors, a.link, a.summary, a.published, a.embedding, f.name AS feed_name "
         f"FROM articles a "
         f"JOIN feeds f ON a.feed_id = f.id "
         f"WHERE 1=1 {exclude_clause} "
@@ -521,5 +522,54 @@ def set_user_interests(conn, user_id, interests):
     conn.execute(
         "UPDATE users SET interests = ? WHERE id = ?",
         (interests, user_id),
+    )
+    conn.commit()
+
+
+def get_unpushed_articles_with_embeddings(conn, user_id, exclude_ids=None):
+    """获取所有有 embedding 的未推送文章（含 embedding 字段）。"""
+    if not exclude_ids:
+        exclude_clause = ""
+        params = (user_id,)
+    else:
+        placeholders = ",".join("?" * len(exclude_ids))
+        exclude_clause = f"AND a.id NOT IN ({placeholders})"
+        params = (*exclude_ids, user_id)
+
+    rows = conn.execute(
+        f"SELECT a.id, a.title, a.authors, a.link, a.summary, a.published, "
+        f"a.embedding, f.name AS feed_name "
+        f"FROM articles a "
+        f"JOIN feeds f ON a.feed_id = f.id "
+        f"WHERE a.embedding IS NOT NULL {exclude_clause} "
+        f"AND a.id NOT IN (SELECT article_id FROM user_article_history WHERE user_id = ?)",
+        params,
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_articles_without_embedding(conn, limit=None):
+    """查找缺少 embedding 的文章，返回 id/title/summary。"""
+    sql = "SELECT id, title, summary FROM articles WHERE embedding IS NULL"
+    params = ()
+    if limit:
+        sql += " LIMIT ?"
+        params = (limit,)
+    return conn.execute(sql, params).fetchall()
+
+
+def update_article_embedding(conn, article_id, embedding_blob):
+    """更新单篇文章的 embedding。"""
+    conn.execute(
+        "UPDATE articles SET embedding = ? WHERE id = ?",
+        (embedding_blob, article_id),
+    )
+
+
+def batch_update_embeddings(conn, updates):
+    """批量更新文章 embedding。updates: [(embedding_blob, article_id), ...]"""
+    conn.executemany(
+        "UPDATE articles SET embedding = ? WHERE id = ?",
+        updates,
     )
     conn.commit()

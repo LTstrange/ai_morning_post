@@ -29,3 +29,6 @@ feeds.json
 
 # 生成的早报
 reports/
+
+# 本地模型缓存
+models/

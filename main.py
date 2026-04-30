@@ -3,6 +3,7 @@
 import argparse
 
 from commands import (
+    cmd_backfill,
     cmd_fetch,
     cmd_parse,
     cmd_regen,
@@ -127,6 +128,17 @@ def main():
     user_export_parser = user_subparsers.add_parser("export", help="导出用户配置到文件")
     user_export_parser.add_argument("file", help="输出文件路径")
 
+    # backfill 子命令
+    backfill_parser = subparsers.add_parser(
+        "backfill", help="为缺少 embedding 的文章批量计算向量"
+    )
+    backfill_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=100,
+        help="每批处理文章数（默认 100）",
+    )
+
     # migrate 子命令
     subparsers.add_parser("migrate", help="执行所有未应用的数据库迁移")
 
@@ -167,6 +179,8 @@ def main():
             user_parser.print_help()
             return
         cmd_user(args)
+    elif args.command == "backfill":
+        cmd_backfill(args)
     elif args.command == "migrate":
         cmd_migrate(args)
     elif args.command == "run":

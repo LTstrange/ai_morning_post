@@ -20,6 +20,8 @@ from db import (
     remove_subscription,
     get_user_subscriptions,
     set_user_interests,
+    get_articles_without_embedding,
+    batch_update_embeddings,
 )
 from rss import fetch_and_store_raw_feeds, parse_and_store_articles
 from users import init_connection, sync_users, generate_for_users, generate_from_batch
@@ -378,4 +380,42 @@ def cmd_user(args):
                 json.dump(export_data, f, ensure_ascii=False, indent=2)
             print(f"已导出 {len(users)} 个用户到 {args.file}")
 
+    conn.close()
+
+
+def cmd_backfill(args):
+    """处理 backfill 子命令：为缺少 embedding 的文章批量计算向量。"""
+    from embedding import compute_embedding
+
+    conn = init_connection()
+    batch_size = getattr(args, "batch_size", 100)
+
+    total = conn.execute(
+        "SELECT COUNT(*) FROM articles WHERE embedding IS NULL"
+    ).fetchone()[0]
+
+    if total == 0:
+        print("所有文章已有 embedding，无需回填")
+        conn.close()
+        return
+
+    print(f"=== 回填 embedding：共 {total} 篇文章待处理 ===")
+    processed = 0
+
+    while True:
+        articles = get_articles_without_embedding(conn, limit=batch_size)
+        if not articles:
+            break
+
+        updates = []
+        for a in articles:
+            text = f"{a['title']} {a['summary'] or ''}"
+            emb = compute_embedding(text)
+            updates.append((emb, a["id"]))
+
+        batch_update_embeddings(conn, updates)
+        processed += len(updates)
+        print(f"  已处理 {processed}/{total} 篇")
+
+    print(f"回填完成，共处理 {processed} 篇文章")
     conn.close()
