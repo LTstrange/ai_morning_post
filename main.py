@@ -25,7 +25,11 @@ def main():
     )
 
     # parse 子命令
-    subparsers.add_parser("parse", help="解析并存储文章")
+    parse_parser = subparsers.add_parser("parse", help="解析并存储文章")
+    parse_parser.add_argument(
+        "--enrich", action="store_true",
+        help="为已有的空摘要文章通过 CrossRef DOI 补全",
+    )
 
     # regen 子命令
     regen_parser = subparsers.add_parser("regen", help="基于已有批次重新生成产物")

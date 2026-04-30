@@ -16,6 +16,7 @@
 - 首字母缩写词根据实际读法改写：
   - 通常作为单词朗读的（如 NASA、NATO），保持原样
   - 有特殊读法的，用文字写出：C++ → "C plus plus"
+- 核心算法名、模型名、框架名等专业术语保留英文原词，不要翻译成中文（例如 Transformer、CNN、LoRA、Diffusion Model 等），按英文自然发音朗读
 - 期刊名必须保持英文全称，不要翻译成中文，IEEE 写作 "I Triple E" 以确保 TTS 正确发音，例如：
   - IEEE Transactions on Image Processing → "I Triple E Transactions on Image Processing"
   - IEEE Transactions on Mobile Computing → "I Triple E Transactions on Mobile Computing"

@@ -117,13 +117,16 @@ def save_raw_feed(conn, feed_id, raw_content):
     return True
 
 
+def article_exists(conn, link):
+    """检查文章是否已存在（按 link 去重）。"""
+    return conn.execute(
+        "SELECT 1 FROM articles WHERE link = ? LIMIT 1", (link,)
+    ).fetchone() is not None
+
+
 def save_article(conn, feed_id, article, embedding=None):
     """保存解析后的文章，link 相同则跳过。返回是否实际插入。"""
-    exists = conn.execute(
-        "SELECT 1 FROM articles WHERE link = ? LIMIT 1",
-        (article["link"],),
-    ).fetchone()
-    if exists:
+    if article_exists(conn, article["link"]):
         return False
     conn.execute(
         "INSERT INTO articles (feed_id, link, title, summary, published, authors, doi, embedding) "

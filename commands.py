@@ -41,6 +41,10 @@ def cmd_parse(args):
     conn = init_connection()
     print("=== 解析并存储文章 ===")
     parse_and_store_articles(conn)
+    if args.enrich:
+        from rss import enrich_missing_abstracts
+        print("\n=== 补全空摘要文章 ===")
+        enrich_missing_abstracts(conn)
     conn.close()
 
 

@@ -9,7 +9,7 @@ import feedparser
 import requests
 
 from abstract_fetcher import fetch_abstract_by_doi
-from db import ensure_feed, get_latest_raw_feed, save_raw_feed, save_article
+from db import ensure_feed, get_latest_raw_feed, save_raw_feed, save_article, article_exists
 
 CACHE_TTL = timedelta(hours=23)
 
@@ -191,6 +191,8 @@ def parse_and_store_articles(conn):
         enriched = 0
         for entry in parsed.entries:
             article = parse_entry(entry)
+            if article_exists(conn, article["link"]):
+                continue
             if enrich and not article["summary"] and article["doi"]:
                 abstract = fetch_abstract_by_doi(article["doi"])
                 if abstract:
@@ -204,3 +206,28 @@ def parse_and_store_articles(conn):
         if enriched:
             msg += f"（{enriched} 篇通过 DOI 补全摘要）"
         print(msg)
+
+
+def enrich_missing_abstracts(conn):
+    """为已有的空摘要文章通过 CrossRef DOI 补全。"""
+    rows = conn.execute(
+        "SELECT id, title, doi FROM articles WHERE summary IS NULL AND doi != ''"
+    ).fetchall()
+    if not rows:
+        print("  没有需要补全的文章")
+        return
+    print(f"  找到 {len(rows)} 篇空摘要文章，开始补全...")
+    success = 0
+    for row in rows:
+        abstract = fetch_abstract_by_doi(row["doi"])
+        if abstract:
+            conn.execute(
+                "UPDATE articles SET summary = ? WHERE id = ?",
+                (abstract, row["id"]),
+            )
+            conn.commit()
+            success += 1
+            print(f"    [补全] {row['title'][:60]}")
+        else:
+            print(f"    [跳过] {row['title'][:60]}")
+    print(f"  完成：{success}/{len(rows)} 篇补全成功")
