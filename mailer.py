@@ -38,6 +38,14 @@ def markdown_to_html(md_text):
         "blockquote{border-left:4px solid #ddd;margin:0;padding:0 16px;color:#666}"
         "</style></head><body>"
         f"{body_html}"
+        '<hr style="margin-top:40px;border:none;border-top:1px solid #e0e0e0">'
+        '<p style="color:#555;font-size:14px;line-height:1.8">'
+        "如果你想调整订阅的期刊或研究兴趣，直接回复这封邮件告诉我就好，我会帮你处理。"
+        "</p>"
+        '<p style="color:#999;font-size:12px;line-height:1.8">'
+        "本邮件由 AI 自动生成，内容仅供参考。"
+        "不想继续接收的话，回复「取消订阅」即可。"
+        "</p>"
         "</body></html>"
     )
 
