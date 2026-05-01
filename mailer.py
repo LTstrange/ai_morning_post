@@ -72,7 +72,7 @@ def send_report_email(to_addr, subject, report_md, tts_path=None):
             audio_part.add_header(
                 "Content-Disposition",
                 "attachment",
-                filename=f"{subject}.mp3",
+                filename=f"ai-morning-post-{subject[-10:]}.mp3",
             )
             msg.attach(audio_part)
 
