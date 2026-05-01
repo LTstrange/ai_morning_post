@@ -150,7 +150,7 @@ def build_user_prompt(date, articles):
     return "\n".join(lines)
 
 
-def call_llm(system_prompt, user_prompt):
+def call_llm(system_prompt, user_prompt) -> str:
     """调用 DeepSeek API，返回生成的文本。"""
     client = OpenAI(
         api_key=os.environ["DEEPSEEK_API_KEY"],
@@ -167,7 +167,7 @@ def call_llm(system_prompt, user_prompt):
         reasoning_effort="high",
     )
 
-    return response.choices[0].message.content
+    return str(response.choices[0].message.content)
 
 
 def generate_report(user_prompt):
@@ -175,7 +175,7 @@ def generate_report(user_prompt):
     return call_llm(REPORT_SYSTEM_PROMPT, user_prompt)
 
 
-def generate_voice_script(report, user_prompt):
+def generate_voice_script(report, user_prompt) -> str:
     """调用 LLM 生成语音播报稿，返回文本。
 
     参数：

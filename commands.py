@@ -209,10 +209,6 @@ def cmd_run(args):
     fetch_and_store_raw_feeds(conn)
     print()
 
-    print("=== 同步用户与订阅 ===")
-    sync_users(conn)
-    print()
-
     print("=== 解析并存储文章 ===")
     parse_and_store_articles(conn)
     print()

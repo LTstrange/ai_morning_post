@@ -51,9 +51,11 @@ def sync_users(conn, filepath="users.json"):
             existing = conn.execute(
                 "SELECT interests FROM users WHERE id = ?", (user_id,)
             ).fetchone()
+            set_user_interests(conn, user_id, user_cfg["interests"])
             if not existing["interests"]:
-                set_user_interests(conn, user_id, user_cfg["interests"])
                 print(f"  [新增] {user_cfg['name']} 的研究兴趣")
+            else:
+                print(f"  [重置] {user_cfg['name']} 的研究兴趣")
 
 
 def init_connection():
