@@ -9,6 +9,7 @@ wheels/
 
 # Virtual environments
 .venv
+uv.toml
 
 # SQLite database
 *.db
