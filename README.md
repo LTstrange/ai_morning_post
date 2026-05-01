@@ -44,7 +44,9 @@
    - run 命令
    - history 命令 show 改成像 batches 那样最好，一行一个batch。batch命令改成详细输出一个batch的样子。
    - export 需要一个批量输出的方式，而且默认改成输出音频和稿件
+   - 一次 全量 run 命令应该也组织成一组比较好，这样能一起send
 
 -  确认一下 三个文件的级联失效的问题。
 - 清理cache的方法得有，audio文件夹还挺大的。
 - 具体邮件的形式要好好设计一下
+- feeds.json.example 需要更新一下

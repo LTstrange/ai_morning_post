@@ -23,6 +23,7 @@ from db import (
     remove_subscription,
     get_user_subscriptions,
     set_user_interests,
+    set_user_email,
     rename_user,
     get_articles_without_embedding,
     batch_update_embeddings,
@@ -53,21 +54,23 @@ def cmd_parse(args):
 
 
 def _resolve_gen_flags(args):
-    """解析 report/voice/tts 标志，都未指定时默认生成 report 和 voice。"""
+    """解析 report/voice/tts/email 标志，都未指定时默认生成 report 和 voice。"""
+    do_email = getattr(args, "email", False)
     if getattr(args, "all", False):
-        return True, True, True
+        return True, True, True, do_email
     any_flag = args.report or args.voice or args.tts
     return (
         args.report if any_flag else True,
         args.voice if any_flag else True,
         args.tts,
+        do_email,
     )
 
 
 def cmd_regen(args):
     """处理 regen 子命令。"""
     conn = init_connection()
-    gen_report, gen_voice, gen_tts = _resolve_gen_flags(args)
+    gen_report, gen_voice, gen_tts, _do_email = _resolve_gen_flags(args)
 
     print(f"=== 基于批次 #{args.batch} 重新生成内容 ===")
     generate_from_batch(
@@ -203,7 +206,7 @@ def cmd_history(args):
 def cmd_run(args):
     """处理 run 子命令。"""
     conn = init_connection()
-    gen_report, gen_voice, gen_tts = _resolve_gen_flags(args)
+    gen_report, gen_voice, gen_tts, do_email = _resolve_gen_flags(args)
 
     print("=== 拉取并存储 RSS 原始内容 ===")
     fetch_and_store_raw_feeds(conn)
@@ -220,6 +223,7 @@ def cmd_run(args):
         gen_report=gen_report,
         gen_voice=gen_voice,
         gen_tts=gen_tts,
+        do_email=do_email,
     )
     print()
     conn.close()
@@ -321,6 +325,7 @@ def cmd_user(args):
         if user:
             status = "活跃" if user["active"] else "已停用"
             print(f"用户: {user['name']}")
+            print(f"邮箱: {user['email'] or '未设置'}")
             print(f"状态: {status}")
             print(f"创建时间: {user['created_at']}")
             subs = get_user_subscriptions(conn, user["id"])
@@ -376,13 +381,15 @@ def cmd_user(args):
             set_user_subscriptions(conn, user_id, uc.get("subscriptions", []))
             if "interests" in uc:
                 set_user_interests(conn, user_id, uc["interests"])
+            if "email" in uc:
+                set_user_email(conn, user_id, uc["email"])
             print(
                 f'已恢复用户 "{name}" 的配置 ({len(uc.get("subscriptions", []))} 个订阅)'
             )
 
     elif args.user_action == "export":
         users = conn.execute(
-            "SELECT id, name, interests FROM users WHERE active = 1 ORDER BY name"
+            "SELECT id, name, email, interests FROM users WHERE active = 1 ORDER BY name"
         ).fetchall()
         if not users:
             print("没有活跃用户可导出")
@@ -394,12 +401,54 @@ def cmd_user(args):
                     "name": u["name"],
                     "subscriptions": [s["name"] for s in subs],
                 }
+                if u["email"]:
+                    user_entry["email"] = u["email"]
                 if u["interests"]:
                     user_entry["interests"] = u["interests"]
                 export_data["users"].append(user_entry)
             with open(args.file, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, ensure_ascii=False, indent=2)
             print(f"已导出 {len(users)} 个用户到 {args.file}")
+
+    conn.close()
+
+
+def cmd_send(args):
+    """处理 send 子命令：发送已有批次的早报邮件。"""
+    from dotenv import load_dotenv
+    from mailer import send_report_email
+
+    load_dotenv()
+    conn = init_connection()
+    batch = get_batch(conn, args.batch)
+    if not batch:
+        print(f"未找到批次 #{args.batch}")
+        conn.close()
+        return
+
+    if not batch["report"]:
+        print(f"批次 #{args.batch} 没有早报内容，无法发送")
+        conn.close()
+        return
+
+    user_name = batch["user_name"]
+    user = conn.execute(
+        "SELECT email FROM users WHERE id = ?", (batch["user_id"],)
+    ).fetchone()
+    email = user["email"] if user else None
+
+    if not email:
+        print(f'用户 "{user_name}" 未配置邮箱')
+        conn.close()
+        return
+
+    tts_path = batch["tts_audio_path"] if args.tts else None
+    subject = f"AI 早报 - {batch['created_at'][:10]}"
+
+    print(f"正在发送批次 #{args.batch} 的早报邮件到 {email}...")
+    ok = send_report_email(email, subject, batch["report"], tts_path=tts_path)
+    if ok:
+        print("邮件发送成功")
 
     conn.close()
 

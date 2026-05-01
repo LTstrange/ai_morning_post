@@ -10,6 +10,7 @@ from commands import (
     cmd_regen,
     cmd_history,
     cmd_run,
+    cmd_send,
     cmd_migrate,
     cmd_user,
 )
@@ -169,6 +170,13 @@ def main():
         help="每批处理文章数（默认 100）",
     )
 
+    # send 子命令
+    send_parser = subparsers.add_parser("send", help="发送已有批次的早报邮件")
+    send_parser.add_argument("batch", type=int, help="批次 ID")
+    send_parser.add_argument(
+        "--tts", action="store_true", help="附带 TTS 音频附件"
+    )
+
     # migrate 子命令
     subparsers.add_parser("migrate", help="执行所有未应用的数据库迁移")
 
@@ -184,6 +192,9 @@ def main():
     )
     run_parser.add_argument(
         "--all", action="store_true", help="生成早报、语音稿和语音音频"
+    )
+    run_parser.add_argument(
+        "--email", action="store_true", help="发送邮件给用户"
     )
 
     args = parser.parse_args()
@@ -213,6 +224,8 @@ def main():
         cmd_export(args)
     elif args.command == "backfill":
         cmd_backfill(args)
+    elif args.command == "send":
+        cmd_send(args)
     elif args.command == "migrate":
         cmd_migrate(args)
     elif args.command == "run":

@@ -18,6 +18,7 @@ from db import (
     update_batch_voice,
     update_batch_tts,
     set_user_interests,
+    set_user_email,
 )
 from generate_report import (
     build_user_prompt,
@@ -51,11 +52,13 @@ def sync_users(conn, filepath="users.json"):
             existing = conn.execute(
                 "SELECT interests FROM users WHERE id = ?", (user_id,)
             ).fetchone()
-            set_user_interests(conn, user_id, user_cfg["interests"])
             if not existing["interests"]:
+                set_user_interests(conn, user_id, user_cfg["interests"])
                 print(f"  [新增] {user_cfg['name']} 的研究兴趣")
-            else:
-                print(f"  [重置] {user_cfg['name']} 的研究兴趣")
+
+        if "email" in user_cfg:
+            set_user_email(conn, user_id, user_cfg["email"])
+            print(f"  [已设置] {user_cfg['name']} 的邮箱: {user_cfg['email']}")
 
 
 def init_connection():
@@ -100,6 +103,20 @@ def _do_tts(conn, batch_id, user_name, voice_script):
         print(f"  [{user_name}] 语音音频生成失败")
 
 
+def _send_email(conn, batch_id, user_name, user_email, report, tts_audio_path):
+    """发送早报邮件给用户。"""
+    if not user_email:
+        print(f"  [{user_name}] 未配置邮箱，跳过邮件发送")
+        return
+    from mailer import send_report_email
+
+    subject = f"AI 早报 - {date.today().isoformat()}"
+    print(f"  [{user_name}] 正在发送邮件到 {user_email}...")
+    ok = send_report_email(user_email, subject, report, tts_path=tts_audio_path)
+    if ok:
+        print(f"  [{user_name}] 邮件发送成功")
+
+
 def _generate_outputs(
     conn,
     batch_id,
@@ -110,8 +127,12 @@ def _generate_outputs(
     gen_report,
     gen_voice,
     gen_tts,
+    do_email=False,
+    user_email=None,
 ):
     """根据标志生成产物，自动处理依赖链。"""
+    tts_audio_path = None
+
     if gen_report:
         report = _ensure_report(conn, batch_id, user_name, user_prompt, None)
         voice_script = None
@@ -129,6 +150,13 @@ def _generate_outputs(
             conn, batch_id, user_name, user_prompt, report, voice_script
         )
         _do_tts(conn, batch_id, user_name, voice_script)
+        if batch_id:
+            batch = get_batch(conn, batch_id)
+            if batch:
+                tts_audio_path = batch["tts_audio_path"]
+
+    if do_email and report:
+        _send_email(conn, batch_id, user_name, user_email, report, tts_audio_path)
 
 
 def generate_for_users(
@@ -137,6 +165,7 @@ def generate_for_users(
     gen_report=True,
     gen_voice=True,
     gen_tts=False,
+    do_email=False,
 ):
     """为用户生成早报内容的核心逻辑：选文 + 创建批次 + 生成产物。"""
     load_dotenv()
@@ -145,18 +174,20 @@ def generate_for_users(
 
     if user_filter:
         users = conn.execute(
-            "SELECT id, name, interests FROM users WHERE name = ?", (user_filter,)
+            "SELECT id, name, email, interests FROM users WHERE name = ?",
+            (user_filter,),
         ).fetchall()
         if not users:
             print(f'未找到用户 "{user_filter}"，跳过早报生成')
             return
     else:
         users = conn.execute(
-            "SELECT id, name, interests FROM users WHERE active = 1"
+            "SELECT id, name, email, interests FROM users WHERE active = 1"
         ).fetchall()
 
     for user in users:
         user_id, user_name, interests = user["id"], user["name"], user["interests"]
+        user_email = user["email"]
 
         print(f"  [{user_name}] 正在筛选候选文章...")
         candidates, today_articles = fetch_candidate_articles(
@@ -194,10 +225,14 @@ def generate_for_users(
             gen_report,
             gen_voice,
             gen_tts,
+            do_email=do_email,
+            user_email=user_email,
         )
 
 
-def generate_from_batch(conn, batch_id, gen_report=True, gen_voice=True, gen_tts=False):
+def generate_from_batch(
+    conn, batch_id, gen_report=True, gen_voice=True, gen_tts=False, do_email=False
+):
     """基于已有批次重新生成产物。"""
     load_dotenv()
 
@@ -209,6 +244,10 @@ def generate_from_batch(conn, batch_id, gen_report=True, gen_voice=True, gen_tts
     user_name = batch["user_name"]
     batch_date = batch["created_at"][:10]
     print(f"  [批次 #{batch_id}] 用户: {user_name}, 创建于: {batch_date}")
+
+    user_email = conn.execute(
+        "SELECT email FROM users WHERE id = ?", (batch["user_id"],)
+    ).fetchone()["email"]
 
     articles = get_batch_articles(conn, batch_id)
     if not articles:
@@ -226,4 +265,6 @@ def generate_from_batch(conn, batch_id, gen_report=True, gen_voice=True, gen_tts
         gen_report,
         gen_voice,
         gen_tts,
+        do_email=do_email,
+        user_email=user_email,
     )

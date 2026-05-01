@@ -149,12 +149,15 @@ def save_article(conn, feed_id, article, embedding=None):
     return True
 
 
-def ensure_user(conn, name):
-    """确保 users 表中存在该用户，返回 user_id。"""
+def ensure_user(conn, name, email=None):
+    """确保 users 表中存在该用户，返回 user_id。若提供 email 则更新。"""
     row = conn.execute("SELECT id FROM users WHERE name = ?", (name,)).fetchone()
     if row:
+        if email is not None:
+            conn.execute("UPDATE users SET email = ? WHERE id = ?", (email, row["id"]))
+            conn.commit()
         return row["id"]
-    cur = conn.execute("INSERT INTO users (name) VALUES (?)", (name,))
+    cur = conn.execute("INSERT INTO users (name, email) VALUES (?, ?)", (name, email))
     conn.commit()
     return cur.lastrowid
 
@@ -456,12 +459,12 @@ def update_batch_tts(conn, batch_id, tts_audio_path):
     conn.commit()
 
 
-def add_user(conn, name):
+def add_user(conn, name, email=None):
     """创建新用户。已存在（无论 active 状态）则跳过，返回 None。"""
     exists = conn.execute("SELECT id FROM users WHERE name = ?", (name,)).fetchone()
     if exists:
         return None
-    cur = conn.execute("INSERT INTO users (name) VALUES (?)", (name,))
+    cur = conn.execute("INSERT INTO users (name, email) VALUES (?, ?)", (name, email))
     conn.commit()
     return cur.lastrowid
 
@@ -556,6 +559,15 @@ def set_user_interests(conn, user_id, interests):
     conn.execute(
         "UPDATE users SET interests = ? WHERE id = ?",
         (interests, user_id),
+    )
+    conn.commit()
+
+
+def set_user_email(conn, user_id, email):
+    """设置用户邮箱地址。"""
+    conn.execute(
+        "UPDATE users SET email = ? WHERE id = ?",
+        (email, user_id),
     )
     conn.commit()
 
