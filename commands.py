@@ -419,42 +419,74 @@ def cmd_user(args):
     conn.close()
 
 
+def _send_batch(conn, batch, send_no_tts=False):
+    """发送单个批次的邮件。返回是否成功。"""
+    from mailer import send_report_email
+
+    if not batch["report"]:
+        print(f"  [批次 #{batch['id']}] 没有早报内容，跳过")
+        return False
+
+    try:
+        email = batch["email"]
+    except (IndexError, KeyError):
+        user = conn.execute(
+            "SELECT email FROM users WHERE id = ?", (batch["user_id"],)
+        ).fetchone()
+        email = user["email"] if user else None
+
+    user_name = batch["user_name"]
+    if not email:
+        print(f"  [{user_name}] 未配置邮箱，跳过")
+        return False
+
+    tts_path = None if send_no_tts else batch["tts_audio_path"]
+    subject = f"AI 早报 - {batch['created_at'][:10]}"
+
+    print(f"  [{user_name}] 正在发送邮件到 {email}...")
+    ok = send_report_email(email, subject, batch["report"], tts_path=tts_path)
+    if ok:
+        print(f"  [{user_name}] 邮件发送成功")
+    return ok
+
+
 def cmd_send(args):
     """处理 send 子命令：发送已有批次的早报邮件。"""
+    from datetime import date
+
     from dotenv import load_dotenv
-    from mailer import send_report_email
 
     load_dotenv()
     conn = init_connection()
-    batch = get_batch(conn, args.batch)
-    if not batch:
-        print(f"未找到批次 #{args.batch}")
+
+    if not args.batch and not args.latest:
+        print("请指定批次 ID 或使用 --latest")
         conn.close()
         return
 
-    if not batch["report"]:
-        print(f"批次 #{args.batch} 没有早报内容，无法发送")
-        conn.close()
-        return
+    if args.latest:
+        from db import get_today_batches
 
-    user_name = batch["user_name"]
-    user = conn.execute(
-        "SELECT email FROM users WHERE id = ?", (batch["user_id"],)
-    ).fetchone()
-    email = user["email"] if user else None
+        today = date.today().isoformat()
+        batches = get_today_batches(conn, today)
+        if not batches:
+            print(f"今天 ({today}) 没有生成任何批次")
+            conn.close()
+            return
 
-    if not email:
-        print(f'用户 "{user_name}" 未配置邮箱')
-        conn.close()
-        return
-
-    tts_path = batch["tts_audio_path"] if args.tts else None
-    subject = f"AI 早报 - {batch['created_at'][:10]}"
-
-    print(f"正在发送批次 #{args.batch} 的早报邮件到 {email}...")
-    ok = send_report_email(email, subject, batch["report"], tts_path=tts_path)
-    if ok:
-        print("邮件发送成功")
+        print(f"=== 发送今日 ({today}) 的 {len(batches)} 个批次 ===")
+        sent = 0
+        for b in batches:
+            if _send_batch(conn, b, args.no_tts):
+                sent += 1
+        print(f"\n共发送 {sent}/{len(batches)} 封邮件")
+    else:
+        batch = get_batch(conn, args.batch)
+        if not batch:
+            print(f"未找到批次 #{args.batch}")
+            conn.close()
+            return
+        _send_batch(conn, batch, args.no_tts)
 
     conn.close()
 

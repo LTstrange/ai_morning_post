@@ -169,9 +169,12 @@ def main():
 
     # send 子命令
     send_parser = subparsers.add_parser("send", help="发送已有批次的早报邮件")
-    send_parser.add_argument("batch", type=int, help="批次 ID")
+    send_parser.add_argument("batch", type=int, nargs="?", help="批次 ID")
     send_parser.add_argument(
-        "--tts", action="store_true", help="附带 TTS 音频附件"
+        "--latest", action="store_true", help="发送当天所有用户的最新批次"
+    )
+    send_parser.add_argument(
+        "--no-tts", action="store_true", help="不附带 TTS 音频附件（默认附带）"
     )
 
     # migrate 子命令

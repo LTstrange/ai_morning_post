@@ -375,6 +375,21 @@ def get_user_history(
     return conn.execute(base, params).fetchall()
 
 
+def get_today_batches(conn, today):
+    """获取当天每个用户最新的一个批次，含用户 email 和产物路径。"""
+    return conn.execute(
+        "SELECT b.id, b.user_id, b.report, b.tts_audio_path, b.created_at, "
+        "u.name AS user_name, u.email "
+        "FROM push_batches b "
+        "JOIN users u ON b.user_id = u.id "
+        "WHERE DATE(b.created_at) = ? AND u.active = 1 "
+        "AND b.id = (SELECT MAX(b2.id) FROM push_batches b2 "
+        "            WHERE b2.user_id = b.user_id AND DATE(b2.created_at) = ?) "
+        "ORDER BY b.created_at",
+        (today, today),
+    ).fetchall()
+
+
 def get_push_batches(
     conn,
     user_id=None,
