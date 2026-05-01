@@ -375,7 +375,14 @@ def get_user_history(
     return conn.execute(base, params).fetchall()
 
 
-def get_push_batches(conn, user_id=None):
+def get_push_batches(
+    conn,
+    user_id=None,
+    date_str=None,
+    date_from=None,
+    date_to=None,
+    limit=None,
+):
     """获取推送批次列表及每批次文章数。"""
     base = (
         "SELECT b.id, u.name AS user_name, b.created_at, COUNT(h.id) AS article_count, "
@@ -386,11 +393,26 @@ def get_push_batches(conn, user_id=None):
         "JOIN users u ON b.user_id = u.id "
         "LEFT JOIN user_article_history h ON h.batch_id = b.id "
     )
+    conditions = []
     params = []
     if user_id:
-        base += "WHERE b.user_id = ? "
+        conditions.append("b.user_id = ?")
         params.append(user_id)
+    if date_str:
+        conditions.append("DATE(b.created_at) = ?")
+        params.append(date_str)
+    if date_from:
+        conditions.append("DATE(b.created_at) >= ?")
+        params.append(date_from)
+    if date_to:
+        conditions.append("DATE(b.created_at) <= ?")
+        params.append(date_to)
+    if conditions:
+        base += "WHERE " + " AND ".join(conditions) + " "
     base += "GROUP BY b.id ORDER BY b.created_at DESC"
+    if limit:
+        base += " LIMIT ?"
+        params.append(limit)
     return conn.execute(base, params).fetchall()
 
 

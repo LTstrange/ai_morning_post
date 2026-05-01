@@ -55,11 +55,10 @@ def main():
     )
 
     # history show
-    history_show_parser = history_subparsers.add_parser("show", help="查看推送历史")
+    history_show_parser = history_subparsers.add_parser("show", help="查看推送批次列表")
     history_show_parser.add_argument(
         "username", nargs="?", help="指定用户名（留空查看所有）"
     )
-    history_show_parser.add_argument("--batch", type=int, help="按批次 ID 筛选")
     history_show_parser.add_argument("--date", help="按日期筛选（YYYY-MM-DD）")
     history_show_parser.add_argument(
         "--from", dest="date_from", help="起始日期（YYYY-MM-DD）"
@@ -71,8 +70,14 @@ def main():
         "--limit",
         type=int,
         default=10,
-        help="显示条数（默认 10，0 表示不限）",
+        help="显示批次数（默认 10，0 表示不限）",
     )
+
+    # history batch
+    history_batch_parser = history_subparsers.add_parser(
+        "batch", help="查看单个批次详情"
+    )
+    history_batch_parser.add_argument("batch_id", type=int, help="批次 ID")
 
     # history reset
     history_reset_parser = history_subparsers.add_parser("reset", help="重置推送历史")
@@ -83,14 +88,6 @@ def main():
     history_reset_parser.add_argument("--date", help="按日期重置（YYYY-MM-DD）")
     history_reset_parser.add_argument(
         "--after", help="重置该日期之后的记录（不含当天，YYYY-MM-DD）"
-    )
-
-    # history batches
-    history_batches_parser = history_subparsers.add_parser(
-        "batches", help="查看推送批次列表"
-    )
-    history_batches_parser.add_argument(
-        "username", nargs="?", help="指定用户名（留空查看所有）"
     )
 
     # user 子命令

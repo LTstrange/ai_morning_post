@@ -43,15 +43,13 @@ uv run python main.py regen 5 --tts            # 用批次 #5 的语音稿生成
 uv run python main.py regen 5 --all            # 重新生成早报、语音稿和音频
 
 # 历史管理
-uv run python main.py history show             # 查看最近 10 条推送历史（按时间倒序）
-uv run python main.py history show --limit 0   # 查看全部推送历史
-uv run python main.py history show --limit 20  # 查看最近 20 条
-uv run python main.py history show Alice       # 查看 Alice 的推送历史
-uv run python main.py history show --batch 3   # 查看批次 #3 的推送记录
+uv run python main.py history show             # 查看最近 10 个推送批次（按时间倒序）
+uv run python main.py history show --limit 0   # 查看全部批次
+uv run python main.py history show --limit 20  # 查看最近 20 个批次
+uv run python main.py history show Alice       # 查看 Alice 的推送批次
 uv run python main.py history show --date 2026-04-29       # 按日期查看
 uv run python main.py history show --from 2026-04-20 --to 2026-04-29  # 按日期范围查看
-uv run python main.py history batches          # 查看所有推送批次
-uv run python main.py history batches Alice    # 查看 Alice 的推送批次
+uv run python main.py history batch 3          # 查看批次 #3 的详细信息和关联文章
 uv run python main.py history reset            # 重置所有用户的推送历史
 uv run python main.py history reset Alice      # 重置 Alice 的推送历史
 uv run python main.py history reset --batch 3  # 回滚批次 #3（级联删除）

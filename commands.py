@@ -6,9 +6,9 @@ from pathlib import Path
 
 from db import (
     reset_user_history,
-    get_user_history,
     get_push_batches,
     get_batch,
+    get_batch_articles,
     migrate,
     get_connection,
     add_user,
@@ -104,7 +104,6 @@ def cmd_history(args):
             return
 
         user_id = user["id"] if user else None
-        batch_id = getattr(args, "batch", None)
         date_str = getattr(args, "date", None)
         date_from = getattr(args, "date_from", None)
         date_to = getattr(args, "date_to", None)
@@ -112,8 +111,6 @@ def cmd_history(args):
         label_parts = []
         if user:
             label_parts.append(args.username)
-        if batch_id:
-            label_parts.append(f"批次 #{batch_id}")
         if date_str:
             label_parts.append(date_str)
         if date_from or date_to:
@@ -122,24 +119,61 @@ def cmd_history(args):
         print(f"=== {label} 的推送历史 ===")
 
         limit = getattr(args, "limit", 10) or None
-        history = get_user_history(
+        batches = get_push_batches(
             conn,
             user_id=user_id,
-            batch_id=batch_id,
             date_str=date_str,
             date_from=date_from,
             date_to=date_to,
             limit=limit,
         )
-        if not history:
-            print("暂无推送记录")
+        if not batches:
+            print("暂无批次记录")
         else:
-            for h in history:
+            for b in batches:
+                status_parts = []
+                if b["has_report"]:
+                    status_parts.append("早报")
+                if b["has_voice"]:
+                    status_parts.append("语音稿")
+                if b["has_tts"]:
+                    status_parts.append("音频")
+                status = " | ".join(status_parts) if status_parts else "无产物"
                 print(
-                    f"  [批次 #{h['batch_id']}] [{h['user_name']}] {h['title']} ({h['pushed_at']})"
+                    f"  批次 #{b['id']} [{b['user_name']}] {b['created_at']} "
+                    f"({b['article_count']} 篇文章) [{status}]"
                 )
-            if limit and len(history) >= limit:
-                print(f"\n  （仅显示最近 {limit} 条，使用 --limit 0 查看全部）")
+            if limit and len(batches) >= limit:
+                print(f"\n  （仅显示最近 {limit} 个批次，使用 --limit 0 查看全部）")
+
+    elif args.history_action == "batch":
+        batch = get_batch(conn, args.batch_id)
+        if not batch:
+            print(f"未找到批次 #{args.batch_id}")
+            conn.close()
+            return
+
+        status_parts = []
+        if batch["report"]:
+            status_parts.append("早报")
+        if batch["voice_script"]:
+            status_parts.append("语音稿")
+        if batch["tts_audio_path"]:
+            status_parts.append("音频")
+        status = " | ".join(status_parts) if status_parts else "无产物"
+
+        print(f"批次 #{batch['id']}")
+        print(f"用户: {batch['user_name']}")
+        print(f"创建时间: {batch['created_at']}")
+        print(f"产物: {status}")
+
+        articles = get_batch_articles(conn, args.batch_id)
+        if articles:
+            print(f"关联文章 ({len(articles)} 篇):")
+            for i, a in enumerate(articles, 1):
+                print(f"  {i}. {a['title']} ({a['feed_name']}, {a['published'][:10]})")
+        else:
+            print("关联文章: 无")
 
     elif args.history_action == "reset":
         user = _resolve_user(conn, getattr(args, "username", None))
@@ -171,34 +205,6 @@ def cmd_history(args):
             desc_parts.append(f"{after_date} 之后")
         desc = "、".join(desc_parts) if desc_parts else "所有用户"
         print(f"已重置 {desc} 的推送历史")
-
-    elif args.history_action == "batches":
-        user = _resolve_user(conn, getattr(args, "username", None))
-        if getattr(args, "username", None) and not user:
-            conn.close()
-            return
-
-        user_id = user["id"] if user else None
-        label = args.username if user else "所有用户"
-        print(f"=== {label} 的推送批次 ===")
-
-        batches = get_push_batches(conn, user_id=user_id)
-        if not batches:
-            print("暂无批次记录")
-        else:
-            for b in batches:
-                status_parts = []
-                if b["has_report"]:
-                    status_parts.append("早报")
-                if b["has_voice"]:
-                    status_parts.append("语音稿")
-                if b["has_tts"]:
-                    status_parts.append("音频")
-                status = " | ".join(status_parts) if status_parts else "无产物"
-                print(
-                    f"  批次 #{b['id']} [{b['user_name']}] {b['created_at']} "
-                    f"({b['article_count']} 篇文章) [{status}]"
-                )
 
     conn.close()
 
